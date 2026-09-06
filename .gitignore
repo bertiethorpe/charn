@@ -1,0 +1,7 @@
+# Build output
+/test
+/obj/
+
+# Local editor and macOS files
+/.vscode/
+.DS_Store
