@@ -9,7 +9,7 @@ static const int width = 800;
 static const int height = 600;
 
 static SDL_Window *window = NULL;
-static SDL_Renderer *renderer = NULL;
+static SDL_GPUDevice *gpu_device = NULL;
 
 void shutdown(void);
 
@@ -53,21 +53,33 @@ bool init(void) {
         return false;
     }
 
-    if (!SDL_CreateWindowAndRenderer("test", width, height, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
-        SDL_Log("Window/Renderer creation failed: %s", SDL_GetError());
+    window = SDL_CreateWindow(
+        "3D Engine",
+        width,
+        height,
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY
+    );
+
+    if (!window) {
+        SDL_Log("Window creation failed: %s", SDL_GetError());
         shutdown();
         return false;
     }
 
-    if (!SDL_SetRenderVSync(renderer, 1)) {
-        SDL_Log("Could not enable VSync: %s", SDL_GetError());
+    gpu_device = SDL_CreateGPUDevice(
+        SDL_GPU_SHADERFORMAT_MSL,
+        true, // enable GPU validation for dev.
+        NULL // default device
+    );
+
+    if (!gpu_device) {
+        SDL_Log("GPU device creation failed: %s", SDL_GetError());
         shutdown();
         return false;
     }
 
-    if (!SDL_SetRenderLogicalPresentation(renderer, width, height,
-                                          SDL_LOGICAL_PRESENTATION_LETTERBOX)) {
-        SDL_Log("Could not set logical presentation: %s", SDL_GetError());
+    if (!SDL_ClaimWindowForGPUDevice(gpu_device, window)) {
+        SDL_Log("Could not claim window for GPU: %s", SDL_GetError());
         shutdown();
         return false;
     }
@@ -77,7 +89,11 @@ bool init(void) {
 }
 
 void shutdown(void) {
-    SDL_DestroyRenderer(renderer);
+    if (gpu_device && window) {
+        SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+    }
+
+    SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
 }

@@ -5,3 +5,4 @@
 # Local editor and macOS files
 /.vscode/
 .DS_Store
+/notes.txt
