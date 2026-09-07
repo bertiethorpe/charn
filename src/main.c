@@ -13,38 +13,38 @@ static SDL_GPUDevice *gpu_device = NULL;
 
 void shutdown(void);
 
-// -------------------- Data --------------------
-typedef struct {
-    float x, y;
-    float angle;
-    float angular_vel;
-    float size;
-} Triangle;
+// // -------------------- Data --------------------
+// typedef struct {
+//     float x, y;
+//     float angle;
+//     float angular_vel;
+//     float size;
+// } Triangle;
 
-// -------------------- Helpers --------------------
-SDL_Vertex Vertex(float x, float y, SDL_FColor color) {
-    SDL_Vertex v = {0};
-    v.position.x = x;
-    v.position.y = y;
-    v.color = color;
-    v.tex_coord.x = 0.0f;
-    v.tex_coord.y = 0.0f;
-    return v;
-}
+// // -------------------- Helpers --------------------
+// SDL_Vertex Vertex(float x, float y, SDL_FColor color) {
+//     SDL_Vertex v = {0};
+//     v.position.x = x;
+//     v.position.y = y;
+//     v.color = color;
+//     v.tex_coord.x = 0.0f;
+//     v.tex_coord.y = 0.0f;
+//     return v;
+// }
 
-SDL_FPoint rotate_point(float x, float y, float cx, float cy, float angle) {
-    float s = sinf(angle);
-    float c = cosf(angle);
+// SDL_FPoint rotate_point(float x, float y, float cx, float cy, float angle) {
+//     float s = sinf(angle);
+//     float c = cosf(angle);
 
-    x -= cx;
-    y -= cy;
+//     x -= cx;
+//     y -= cy;
 
-    float xnew = x * c - y * s;
-    float ynew = x * s + y * c;
+//     float xnew = x * c - y * s;
+//     float ynew = x * s + y * c;
 
-    SDL_FPoint p = { xnew + cx, ynew + cy };
-    return p;
-}
+//     SDL_FPoint p = { xnew + cx, ynew + cy };
+//     return p;
+// }
 
 // -------------------- Init / Shutdown --------------------
 bool init(void) {
@@ -114,99 +114,164 @@ void process_input(bool *quit) {
     }
 }
 
-// -------------------- Rendering Helpers --------------------
-void clear_screen(void) {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-}
+// // -------------------- Rendering Helpers --------------------
+// void clear_screen(void) {
+//     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+//     SDL_RenderClear(renderer);
+// }
 
-void draw_background(SDL_FRect *viewport) {
-    SDL_SetRenderDrawColor(renderer, 100, 149, 237, 255);
-    SDL_RenderFillRect(renderer, viewport);
-}
+// void draw_background(SDL_FRect *viewport) {
+//     SDL_SetRenderDrawColor(renderer, 100, 149, 237, 255);
+//     SDL_RenderFillRect(renderer, viewport);
+// }
 
-// -------------------- Triangle Logic --------------------
-void update_triangle(Triangle *t, float dt) {
-    t->angle += t->angular_vel * dt;
+// // -------------------- Triangle Logic --------------------
+// void update_triangle(Triangle *t, float dt) {
+//     t->angle += t->angular_vel * dt;
 
-    // keep angle in range (prevents floating drift)
-    if (t->angle > 6.283185f) {
-        t->angle -= 6.283185f;
-    }
-}
+//     // keep angle in range (prevents floating drift)
+//     if (t->angle > 6.283185f) {
+//         t->angle -= 6.283185f;
+//     }
+// }
 
-void draw_triangle(Triangle *t) {
-    float cx = t->x;
-    float cy = t->y;
+// void draw_triangle(Triangle *t) {
+//     float cx = t->x;
+//     float cy = t->y;
 
-    float side = t->size;
-    float triangle_height = (sqrtf(3.0f) / 2.0f) * side;
+//     float side = t->size;
+//     float triangle_height = (sqrtf(3.0f) / 2.0f) * side;
 
-    SDL_FPoint p1 = { cx, cy - (2.0f/3.0f) * triangle_height };
-    SDL_FPoint p2 = { cx - side / 2.0f, cy + (1.0f/3.0f) * triangle_height };
-    SDL_FPoint p3 = { cx + side / 2.0f, cy + (1.0f/3.0f) * triangle_height };
+//     SDL_FPoint p1 = { cx, cy - (2.0f/3.0f) * triangle_height };
+//     SDL_FPoint p2 = { cx - side / 2.0f, cy + (1.0f/3.0f) * triangle_height };
+//     SDL_FPoint p3 = { cx + side / 2.0f, cy + (1.0f/3.0f) * triangle_height };
 
-    p1 = rotate_point(p1.x, p1.y, cx, cy, t->angle);
-    p2 = rotate_point(p2.x, p2.y, cx, cy, t->angle);
-    p3 = rotate_point(p3.x, p3.y, cx, cy, t->angle);
+//     p1 = rotate_point(p1.x, p1.y, cx, cy, t->angle);
+//     p2 = rotate_point(p2.x, p2.y, cx, cy, t->angle);
+//     p3 = rotate_point(p3.x, p3.y, cx, cy, t->angle);
 
-    SDL_FColor red = {1.0f, 0.0f, 0.0f, 1.0f};
-    SDL_FColor green = {0.0f, 1.0f, 0.0f, 1.0f};
-    SDL_FColor blue = {0.0f, 0.0f, 1.0f, 1.0f};
+//     SDL_FColor red = {1.0f, 0.0f, 0.0f, 1.0f};
+//     SDL_FColor green = {0.0f, 1.0f, 0.0f, 1.0f};
+//     SDL_FColor blue = {0.0f, 0.0f, 1.0f, 1.0f};
 
-    SDL_Vertex vertices[3] = {
-        Vertex(p1.x, p1.y, red),
-        Vertex(p2.x, p2.y, green),
-        Vertex(p3.x, p3.y, blue)
-    };
+//     SDL_Vertex vertices[3] = {
+//         Vertex(p1.x, p1.y, red),
+//         Vertex(p2.x, p2.y, green),
+//         Vertex(p3.x, p3.y, blue)
+//     };
 
-    int indices[3] = {0, 1, 2};
-    SDL_RenderGeometry(renderer, NULL, vertices, 3, indices, 3);
-}
+//     int indices[3] = {0, 1, 2};
+//     SDL_RenderGeometry(renderer, NULL, vertices, 3, indices, 3);
+// }
 
 // -------------------- Render --------------------
-void render(Triangle *tri) {
-    clear_screen();
+// void render(Triangle *tri) {
+//     clear_screen();
 
-    SDL_FRect viewport = {0.0f, 0.0f, (float)width, (float)height};
+//     SDL_FRect viewport = {0.0f, 0.0f, (float)width, (float)height};
 
-    draw_background(&viewport);
+//     draw_background(&viewport);
 
-    // SDL scales these logical coordinates to the window automatically.
-    tri->x = width / 2.0f;
-    tri->y = height / 2.0f;
+//     // SDL scales these logical coordinates to the window automatically.
+//     tri->x = width / 2.0f;
+//     tri->y = height / 2.0f;
 
-    draw_triangle(tri);
+//     draw_triangle(tri);
 
-    SDL_RenderPresent(renderer);
+//     SDL_RenderPresent(renderer);
+//}
+bool render(void){ 
+    SDL_GPUCommandBuffer *command_buffer = 
+        SDL_AcquireGPUCommandBuffer(gpu_device);
+
+    if (!command_buffer) {
+        SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_GPUTexture *swapchain_texture = NULL;
+
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(
+            command_buffer,
+            window,
+            &swapchain_texture,
+            NULL,
+            NULL)) {
+        SDL_Log("Could not acquire swapchain texture: %s", SDL_GetError());
+        SDL_CancelGPUCommandBuffer(command_buffer);
+        return false;
+    }
+
+    // A minimized window may not have a swapchain texture.
+    if (swapchain_texture) {
+        SDL_GPUColorTargetInfo color_target = {0};
+
+        color_target.texture = swapchain_texture;
+        color_target.clear_color =
+            (SDL_FColor){100.0f / 255.0f,
+                        149.0f / 255.0f,
+                        237.0f / 255.0f,
+                        1.0f};
+        color_target.load_op = SDL_GPU_LOADOP_CLEAR;
+        color_target.store_op = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPURenderPass *render_pass =
+            SDL_BeginGPURenderPass(
+                command_buffer,
+                &color_target,
+                1,
+                NULL
+            );
+
+        SDL_EndGPURenderPass(render_pass);
+    }
+
+    if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+        SDL_Log("Could not submit command buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    return true;
 }
 
 // -------------------- Game Loop --------------------
+// void run(void) {
+//     bool quit = false;
+
+//     Triangle tri = {0};
+//     tri.angle = 0.0f;
+//     tri.angular_vel = 2.0f;
+//     tri.size = 300.0f;
+
+//     Uint64 last = SDL_GetPerformanceCounter();  // ← matches the counter used in the loop
+//     Uint64 freq = SDL_GetPerformanceFrequency();
+
+//     while (!quit) {
+//         Uint64 now = SDL_GetPerformanceCounter();
+        
+//         float dt = (now - last) / (float)freq;
+//         last = now;
+
+//         // Treat long interruptions, such as macOS live resizing, as paused time.
+//         if (dt > 0.1f) {
+//             dt = 0.0f;
+//         }
+
+//         process_input(&quit);
+//         update_triangle(&tri, dt);
+//         render(&tri);
+//     }
+// }
+
 void run(void) {
     bool quit = false;
 
-    Triangle tri = {0};
-    tri.angle = 0.0f;
-    tri.angular_vel = 2.0f;
-    tri.size = 300.0f;
-
-    Uint64 last = SDL_GetPerformanceCounter();  // ← matches the counter used in the loop
-    Uint64 freq = SDL_GetPerformanceFrequency();
-
     while (!quit) {
-        Uint64 now = SDL_GetPerformanceCounter();
-        
-        float dt = (now - last) / (float)freq;
-        last = now;
-
-        // Treat long interruptions, such as macOS live resizing, as paused time.
-        if (dt > 0.1f) {
-            dt = 0.0f;
-        }
-
         process_input(&quit);
-        update_triangle(&tri, dt);
-        render(&tri);
+
+        if (!render()) {
+            quit = true;
+        }
     }
 }
 
