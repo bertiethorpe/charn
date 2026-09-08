@@ -1,0 +1,12 @@
+#include <metal_stdlib>
+using namespace metal;
+
+struct VertexInput {
+    float4 position [[position]];
+    float4 color;
+};
+
+fragment float4 fragment_main(VertexInput input [[stage_in]])
+{
+    return input.color;
+}
