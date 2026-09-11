@@ -15,9 +15,30 @@ static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
 
-void shutdown(void);
+// ------------------------- Data --------------------------
+typedef struct {
+    float position[3];
+    float color[4];
+} Vertex;
+
+static const Vertex triangle_vertices[] = {
+    {
+        .position = { 0.0f,  0.5f, 0.0f},
+        .color =    { 1.0f,  0.0f, 0.0f, 1.0f}
+    },
+    {
+        .position = {-0.5f, -0.5f, 0.0f},
+        .color =    { 0.0f,  1.0f, 0.0f, 1.0f}
+    },
+    {
+        .position = { 0.5f, -0.5f, 0.0f},
+        .color =    { 0.0f,  0.0f, 1.0f, 1.0f}
+    }
+};
 
 // -------------------- Init / Shutdown --------------------
+void shutdown(void);
+
 bool init(void) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init Error: %s", SDL_GetError());
