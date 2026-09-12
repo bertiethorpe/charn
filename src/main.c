@@ -23,20 +23,38 @@ typedef struct {
     float color[4];
 } Vertex;
 
+typedef struct {
+    float transform[16];
+} VertexUniforms;
+
 static const Vertex triangle_vertices[] = {
     {
-        .position = { 0.0f,  0.5f, 0.0f},
+        .position = { 0.0f,  0.577350269f, 0.0f},
         .color =    { 1.0f,  0.0f, 0.0f, 1.0f}
     },
     {
-        .position = {-0.5f, -0.5f, 0.0f},
+        .position = {-0.5f, -0.288675135f, 0.0f},
         .color =    { 0.0f,  1.0f, 0.0f, 1.0f}
     },
     {
-        .position = { 0.5f, -0.5f, 0.0f},
+        .position = { 0.5f, -0.288675135f, 0.0f},
         .color =    { 0.0f,  0.0f, 1.0f, 1.0f}
     }
 };
+
+static VertexUniforms create_transform(float angle, float aspect_scale) {
+    float c = cosf(angle);
+    float s = sinf(angle);
+
+    return (VertexUniforms){
+        .transform = {
+             aspect_scale * c, s,    0.0f, 0.0f,
+            -aspect_scale * s, c,    0.0f, 0.0f,
+             0.0f,             0.0f, 1.0f, 0.0f,
+             0.0f,             0.0f, 0.0f, 1.0f
+        }
+    };
+}
 
 // -------------------- Init / Shutdown --------------------
 void shutdown(void);
@@ -207,6 +225,7 @@ bool init(void) {
     vertex_shader_info.entrypoint = "vertex_main";
     vertex_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
     vertex_shader_info.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+    vertex_shader_info.num_uniform_buffers = 1;
 
     vertex_shader = SDL_CreateGPUShader(
         gpu_device,
@@ -355,7 +374,7 @@ void process_input(bool *quit) {
 }
 
 // -------------------- Render --------------------
-bool render(void){ 
+bool render(float angle) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
 
@@ -365,13 +384,15 @@ bool render(void){
     }
 
     SDL_GPUTexture *swapchain_texture = NULL;
+    Uint32 swapchain_width = 0;
+    Uint32 swapchain_height = 0;
 
     if (!SDL_WaitAndAcquireGPUSwapchainTexture(
             command_buffer,
             window,
             &swapchain_texture,
-            NULL,
-            NULL)) {
+            &swapchain_width,
+            &swapchain_height)) {
         SDL_Log("Could not acquire swapchain texture: %s", SDL_GetError());
         SDL_CancelGPUCommandBuffer(command_buffer);
         return false;
@@ -414,6 +435,18 @@ bool render(void){
             1
         );
 
+        float aspect_scale =
+            (float)swapchain_height / (float)swapchain_width;
+        VertexUniforms transform =
+            create_transform(angle, aspect_scale);
+
+        SDL_PushGPUVertexUniformData(
+            command_buffer,
+            0, // corresponds to [[buffer(0)]] in the msl vert shader
+            &transform,
+            sizeof(transform)
+        );
+
         SDL_DrawGPUPrimitives(
             render_pass,
             3,  // three vertices
@@ -436,11 +469,27 @@ bool render(void){
 // -------------------- Game Loop --------------------
 void run(void) {
     bool quit = false;
+    float angle = 0.0f;
+
+    Uint64 last = SDL_GetPerformanceCounter();
+    Uint64 frequency = SDL_GetPerformanceFrequency();
 
     while (!quit) {
+        Uint64 now = SDL_GetPerformanceCounter();
+        float dt = (float)(now - last) / (float)frequency;
+        last = now;
+
         process_input(&quit);
 
-        if (!render()) {
+        if (dt <= 0.1f) {
+            angle += 2.0f * dt; // rotate 2 radians per second
+        }
+
+        if (angle >= 6.28318530718f) { // 2 * pi
+            angle -= 6.28318530718f;
+        }
+
+        if (!render(angle)) {
             quit = true;
         }
     }

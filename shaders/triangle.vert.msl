@@ -11,10 +11,16 @@ struct VertexOutput {
     float4 color;
 };
 
-vertex VertexOutput vertex_main(VertexInput input [[stage_in]])
+struct VertexUniforms {
+    float4x4 transform;
+};
+
+vertex VertexOutput vertex_main(
+    VertexInput input [[stage_in]],
+    constant VertexUniforms &uniforms [[buffer(0)]])
 {
     VertexOutput output;
-    output.position = float4(input.position, 1.0);
+    output.position = uniforms.transform * float4(input.position, 1.0);
     output.color = input.color;
     return output;
 }
