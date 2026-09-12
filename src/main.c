@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <math.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -14,6 +15,7 @@ static SDL_GPUDevice *gpu_device = NULL;
 static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
+static SDL_GPUBuffer *vertex_buffer = NULL;
 
 // ------------------------- Data --------------------------
 typedef struct {
@@ -75,6 +77,101 @@ bool init(void) {
         shutdown();
         return false;
     }
+
+    const Uint32 vertex_data_size = (Uint32)sizeof(triangle_vertices);
+
+    SDL_GPUBufferCreateInfo vertex_buffer_info = {0};
+    vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    vertex_buffer_info.size = vertex_data_size;
+
+    vertex_buffer = SDL_CreateGPUBuffer(
+        gpu_device,
+        &vertex_buffer_info
+    );
+
+    if (!vertex_buffer) {
+        SDL_Log("Could not create vertex buffer: %s", SDL_GetError());
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo transfer_info = {0};
+    transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transfer_info.size = vertex_data_size;
+
+    SDL_GPUTransferBuffer *transfer_buffer = SDL_CreateGPUTransferBuffer(
+        gpu_device,
+        &transfer_info
+    );
+
+    if (!transfer_buffer) {
+        SDL_Log("Could not create transfer buffer: %s", SDL_GetError());
+        shutdown();
+        return false;
+    }
+
+    void *mapped_data = SDL_MapGPUTransferBuffer(
+        gpu_device,
+        transfer_buffer,
+        false
+    );
+
+    if (!mapped_data) {
+        SDL_Log("Could not map transfer buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
+        shutdown();
+        return false;
+    }
+
+    SDL_memcpy(
+        mapped_data,
+        triangle_vertices,
+        vertex_data_size
+    );
+
+    SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
+
+    SDL_GPUCommandBuffer *upload_commands =
+        SDL_AcquireGPUCommandBuffer(gpu_device);
+
+    if (!upload_commands) {
+        SDL_Log("Could not acquire upload command buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUCopyPass *copy_pass =
+        SDL_BeginGPUCopyPass(upload_commands);
+
+    SDL_GPUTransferBufferLocation source = {0};
+    source.transfer_buffer = transfer_buffer;
+    source.offset = 0;
+
+    SDL_GPUBufferRegion destination = {0};
+    destination.buffer = vertex_buffer;
+    destination.offset = 0;
+    destination.size = vertex_data_size;
+
+    SDL_UploadToGPUBuffer(
+        copy_pass,
+        &source,
+        &destination,
+        false
+    );
+
+    SDL_EndGPUCopyPass(copy_pass);
+
+    if (!SDL_SubmitGPUCommandBuffer(upload_commands)) {
+        SDL_Log("Could not submit vertex upload: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
+        shutdown();
+        return false;
+    }
+
+    SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
+
+    SDL_Log("Uploaded triangle vertices");
 
     size_t vertex_shader_size = 0;
     Uint8 *vertex_shader_code = SDL_LoadFile(
@@ -138,6 +235,8 @@ bool init(void) {
 
     if (!fragment_shader) {
         SDL_Log("Could not create fragment shader: %s", SDL_GetError());
+        SDL_free(vertex_shader_code);
+        SDL_free(fragment_shader_code);
         shutdown();
         return false;
     }
@@ -153,10 +252,33 @@ bool init(void) {
 
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {0};
 
+    SDL_GPUVertexBufferDescription vertex_buffer_description = {0};
+    vertex_buffer_description.slot = 0;
+    vertex_buffer_description.pitch = sizeof(Vertex);
+    vertex_buffer_description.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+
+    SDL_GPUVertexAttribute vertex_attributes[2] = {0};
+
+    vertex_attributes[0].location = 0;
+    vertex_attributes[0].buffer_slot = 0;
+    vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    vertex_attributes[0].offset = (Uint32)offsetof(Vertex, position);
+
+    vertex_attributes[1].location = 1;
+    vertex_attributes[1].buffer_slot = 0;
+    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+    vertex_attributes[1].offset = (Uint32)offsetof(Vertex, color);
+
     pipeline_info.vertex_shader = vertex_shader;
     pipeline_info.fragment_shader = fragment_shader;
     pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+
+    pipeline_info.vertex_input_state.vertex_buffer_descriptions =
+        &vertex_buffer_description;
+    pipeline_info.vertex_input_state.num_vertex_buffers = 1;
+    pipeline_info.vertex_input_state.vertex_attributes = vertex_attributes;
+    pipeline_info.vertex_input_state.num_vertex_attributes = 2;
 
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions =
@@ -200,6 +322,10 @@ void shutdown(void) {
 
         if (fragment_shader) {
             SDL_ReleaseGPUShader(gpu_device, fragment_shader);
+        }
+
+        if (vertex_buffer) {
+            SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
         }
     }
 
@@ -275,6 +401,17 @@ bool render(void){
         SDL_BindGPUGraphicsPipeline(
             render_pass,
             graphics_pipeline
+        );
+
+        SDL_GPUBufferBinding vertex_binding = {0};
+        vertex_binding.buffer = vertex_buffer;
+        vertex_binding.offset = 0;
+
+        SDL_BindGPUVertexBuffers(
+            render_pass,
+            0,
+            &vertex_binding,
+            1
         );
 
         SDL_DrawGPUPrimitives(
