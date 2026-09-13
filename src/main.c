@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <math.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+
+#include "math3d.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -24,7 +25,7 @@ typedef struct {
 } Vertex;
 
 typedef struct {
-    float transform[16];
+    Mat4 transform;
 } VertexUniforms;
 
 static const Vertex triangle_vertices[] = {
@@ -41,20 +42,6 @@ static const Vertex triangle_vertices[] = {
         .color =    { 0.0f,  0.0f, 1.0f, 1.0f}
     }
 };
-
-static VertexUniforms create_transform(float angle, float aspect_scale) {
-    float c = cosf(angle);
-    float s = sinf(angle);
-
-    return (VertexUniforms){
-        .transform = {
-             aspect_scale * c, s,    0.0f, 0.0f,
-            -aspect_scale * s, c,    0.0f, 0.0f,
-             0.0f,             0.0f, 1.0f, 0.0f,
-             0.0f,             0.0f, 0.0f, 1.0f
-        }
-    };
-}
 
 // -------------------- Init / Shutdown --------------------
 void shutdown(void);
@@ -435,16 +422,30 @@ bool render(float angle) {
             1
         );
 
-        float aspect_scale =
-            (float)swapchain_height / (float)swapchain_width;
-        VertexUniforms transform =
-            create_transform(angle, aspect_scale);
+        float aspect =
+            (float)swapchain_width / (float)swapchain_height;
+        float vertical_fov =
+            80.0f * (3.14159265359f / 180.0f); // radians
+
+        Mat4 model = mat4_rotation_y(angle);
+        Mat4 view = mat4_translation(0.0f, 0.0f, 2.0f);
+        Mat4 projection = mat4_perspective_projection(
+            vertical_fov,
+            aspect,
+            0.1f,
+            100.0f
+        );
+
+        Mat4 view_model = mat4_multiply(view, model);
+        VertexUniforms uniforms = {
+            .transform = mat4_multiply(projection, view_model)
+        };
 
         SDL_PushGPUVertexUniformData(
             command_buffer,
             0, // corresponds to [[buffer(0)]] in the msl vert shader
-            &transform,
-            sizeof(transform)
+            &uniforms,
+            sizeof(uniforms)
         );
 
         SDL_DrawGPUPrimitives(

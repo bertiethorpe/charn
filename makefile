@@ -5,7 +5,7 @@ CC = clang
 TARGET = test
 
 # Source files
-SRC = src/main.c
+SRC = src/main.c src/math3d.c
 
 # Compiler & linker flags from pkg-config
 CFLAGS = -Wall -Wextra -std=c99 $(shell pkg-config --cflags sdl3)
