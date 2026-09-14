@@ -18,6 +18,14 @@ static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
 static SDL_GPUBuffer *vertex_buffer = NULL;
 
+static SDL_GPUTexture *depth_texture = NULL;
+
+static const SDL_GPUTextureFormat depth_texture_format =
+    SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+
+static Uint32 depth_texture_width = 0;
+static Uint32 depth_texture_height = 0;
+
 // ------------------------- Data --------------------------
 typedef struct {
     float position[3];
@@ -42,6 +50,53 @@ static const Vertex triangle_vertices[] = {
         .color =    { 0.0f,  0.0f, 1.0f, 1.0f}
     }
 };
+
+static bool ensure_depth_texture(
+    Uint32 texture_width,
+    Uint32 texture_height
+) {
+    if (depth_texture &&
+        depth_texture_width == texture_width &&
+        depth_texture_height == texture_height) {
+        return true;
+    }
+
+    if (depth_texture) {
+        SDL_ReleaseGPUTexture(gpu_device, depth_texture);
+        depth_texture = NULL;
+    }
+    
+    SDL_GPUTextureCreateInfo texture_info = {0};
+
+    texture_info.type = SDL_GPU_TEXTURETYPE_2D;
+    texture_info.format = depth_texture_format;
+    texture_info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    texture_info.width = texture_width;
+    texture_info.height = texture_height;
+    texture_info.layer_count_or_depth = 1;
+    texture_info.num_levels = 1;
+    texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+    depth_texture =
+        SDL_CreateGPUTexture(gpu_device, &texture_info);
+
+    if (!depth_texture) {
+        depth_texture_width = 0;
+        depth_texture_height = 0;
+
+        SDL_Log(
+            "Could not create depth texture: %s",
+            SDL_GetError()
+        );
+
+        return false;
+    }
+
+    depth_texture_width = texture_width;
+    depth_texture_height = texture_height;
+
+    return true;
+}
 
 // -------------------- Init / Shutdown --------------------
 void shutdown(void);
@@ -279,6 +334,9 @@ bool init(void) {
     pipeline_info.fragment_shader = fragment_shader;
     pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    pipeline_info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
+    pipeline_info.depth_stencil_state.enable_depth_test = true;
+    pipeline_info.depth_stencil_state.enable_depth_write = true;
 
     pipeline_info.vertex_input_state.vertex_buffer_descriptions =
         &vertex_buffer_description;
@@ -289,6 +347,8 @@ bool init(void) {
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions =
         &color_target_description;
+    pipeline_info.target_info.has_depth_stencil_target = true;
+    pipeline_info.target_info.depth_stencil_format = depth_texture_format;
 
     graphics_pipeline = SDL_CreateGPUGraphicsPipeline(
         gpu_device,
@@ -332,6 +392,10 @@ void shutdown(void) {
 
         if (vertex_buffer) {
             SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
+        }
+
+        if (depth_texture) {
+            SDL_ReleaseGPUTexture(gpu_device, depth_texture);
         }
     }
 
@@ -387,6 +451,13 @@ bool render(float angle) {
 
     // A minimized window may not have a swapchain texture.
     if (swapchain_texture) {
+        if (!ensure_depth_texture(
+                swapchain_width,
+                swapchain_height)) {
+            SDL_CancelGPUCommandBuffer(command_buffer);
+            return false;
+        }
+
         SDL_GPUColorTargetInfo color_target = {0};
 
         color_target.texture = swapchain_texture;
@@ -398,12 +469,22 @@ bool render(float angle) {
         color_target.load_op = SDL_GPU_LOADOP_CLEAR;
         color_target.store_op = SDL_GPU_STOREOP_STORE;
 
+        SDL_GPUDepthStencilTargetInfo depth_target = {0};
+
+        depth_target.texture = depth_texture;
+        depth_target.clear_depth = 1.0f;
+        depth_target.load_op = SDL_GPU_LOADOP_CLEAR;
+        depth_target.store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depth_target.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+        depth_target.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depth_target.cycle = true;
+
         SDL_GPURenderPass *render_pass =
             SDL_BeginGPURenderPass(
                 command_buffer,
                 &color_target,
                 1,
-                NULL
+                &depth_target
             );
 
         SDL_BindGPUGraphicsPipeline(
