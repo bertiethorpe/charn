@@ -36,19 +36,22 @@ typedef struct {
     Mat4 transform;
 } VertexUniforms;
 
-static const Vertex triangle_vertices[] = {
-    {
-        .position = { 0.0f,  0.577350269f, 0.0f},
-        .color =    { 1.0f,  0.0f, 0.0f, 1.0f}
-    },
-    {
-        .position = {-0.5f, -0.288675135f, 0.0f},
-        .color =    { 0.0f,  1.0f, 0.0f, 1.0f}
-    },
-    {
-        .position = { 0.5f, -0.288675135f, 0.0f},
-        .color =    { 0.0f,  0.0f, 1.0f, 1.0f}
-    }
+static const Vertex face_vertices[] = {
+    // First triangle: bottom-left, top-left, top-right
+    { .position = {-0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} },
+    { .position = {-0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  1.0f,  0.0f, 1.0f} },
+    { .position = { 0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} },
+
+    // Second triangle: bottom-left, top-right, bottom-right
+    { .position = {-0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} },
+    { .position = { 0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} },
+    { .position = { 0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }
 };
 
 static bool ensure_depth_texture(
@@ -138,7 +141,7 @@ bool init(void) {
         return false;
     }
 
-    const Uint32 vertex_data_size = (Uint32)sizeof(triangle_vertices);
+    const Uint32 vertex_data_size = (Uint32)sizeof(face_vertices);
 
     SDL_GPUBufferCreateInfo vertex_buffer_info = {0};
     vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
@@ -185,7 +188,7 @@ bool init(void) {
 
     SDL_memcpy(
         mapped_data,
-        triangle_vertices,
+        face_vertices,
         vertex_data_size
     );
 
@@ -231,7 +234,7 @@ bool init(void) {
 
     SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 
-    SDL_Log("Uploaded triangle vertices");
+    SDL_Log("Uploaded face vertices");
 
     size_t vertex_shader_size = 0;
     Uint8 *vertex_shader_code = SDL_LoadFile(
@@ -531,8 +534,8 @@ bool render(float angle) {
 
         SDL_DrawGPUPrimitives(
             render_pass,
-            3,  // three vertices
-            1,  // one triangle instance
+            6,  // six vertices
+            1,  // one face instance
             0,  // begin at vertex zero
             0   // begin at instance zero
         );
