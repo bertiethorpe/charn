@@ -17,6 +17,7 @@ static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
 static SDL_GPUBuffer *vertex_buffer = NULL;
+static SDL_GPUBuffer *index_buffer = NULL;
 
 static SDL_GPUTexture *depth_texture = NULL;
 
@@ -36,22 +37,35 @@ typedef struct {
     Mat4 transform;
 } VertexUniforms;
 
-static const Vertex face_vertices[] = {
-    // First triangle: bottom-left, top-left, top-right
-    { .position = {-0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} },
-    { .position = {-0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  1.0f,  0.0f, 1.0f} },
-    { .position = { 0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} },
+static const Uint16 cube_indices[] = {
+    0, 1, 2, 0, 2, 3,  // front:  -Z
+    4, 7, 6, 4, 6, 5,  // back:   +Z
+    4, 5, 1, 4, 1, 0,  // left:   -X
+    3, 2, 6, 3, 6, 7,  // right:  +X
+    1, 5, 6, 1, 6, 2,  // top:    +Y
+    4, 0, 3, 4, 3, 7   // bottom: -Y
+};
 
-    // Second triangle: bottom-left, top-right, bottom-right
+static const Vertex cube_vertices[] = {
+    // Front: z = -0.5
     { .position = {-0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} },
+      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} }, // 0
+    { .position = {-0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  1.0f,  0.0f, 1.0f} }, // 1
     { .position = { 0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} },
+      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} }, // 2
     { .position = { 0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }
+      .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }, // 3
+
+    // Back: z = +0.5
+    { .position = {-0.5f, -0.5f,  0.5f},
+      .color    = { 0.0f,  1.0f,  1.0f, 1.0f} }, // 4
+    { .position = {-0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  0.0f,  1.0f, 1.0f} }, // 5
+    { .position = { 0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  1.0f,  1.0f, 1.0f} }, // 6
+    { .position = { 0.5f, -0.5f,  0.5f},
+      .color    = { 1.0f,  0.5f,  0.0f, 1.0f} }  // 7
 };
 
 static bool ensure_depth_texture(
@@ -141,26 +155,34 @@ bool init(void) {
         return false;
     }
 
-    const Uint32 vertex_data_size = (Uint32)sizeof(face_vertices);
+    const Uint32 vertex_data_size = (Uint32)sizeof(cube_vertices);
+    const Uint32 index_data_size = (Uint32)sizeof(cube_indices);
 
     SDL_GPUBufferCreateInfo vertex_buffer_info = {0};
     vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
     vertex_buffer_info.size = vertex_data_size;
 
-    vertex_buffer = SDL_CreateGPUBuffer(
-        gpu_device,
-        &vertex_buffer_info
-    );
-
+    vertex_buffer = SDL_CreateGPUBuffer(gpu_device, &vertex_buffer_info);
     if (!vertex_buffer) {
         SDL_Log("Could not create vertex buffer: %s", SDL_GetError());
         shutdown();
         return false;
     }
 
+    SDL_GPUBufferCreateInfo index_info = {0};
+    index_info.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+    index_info.size = index_data_size;
+
+    index_buffer = SDL_CreateGPUBuffer(gpu_device, &index_info);
+    if (!index_buffer) {
+        SDL_Log("Could not create index buffer: %s", SDL_GetError());
+        shutdown();
+        return false;
+    }
+
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transfer_info.size = vertex_data_size;
+    transfer_info.size = vertex_data_size + index_data_size;
 
     SDL_GPUTransferBuffer *transfer_buffer = SDL_CreateGPUTransferBuffer(
         gpu_device,
@@ -188,8 +210,14 @@ bool init(void) {
 
     SDL_memcpy(
         mapped_data,
-        face_vertices,
+        cube_vertices,
         vertex_data_size
+    );
+
+    SDL_memcpy(
+        (Uint8 *)mapped_data + vertex_data_size,
+        cube_indices,
+        index_data_size
     );
 
     SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
@@ -220,6 +248,22 @@ bool init(void) {
         copy_pass,
         &source,
         &destination,
+        false
+    );
+
+    SDL_GPUTransferBufferLocation index_source = {0};
+    index_source.transfer_buffer = transfer_buffer;
+    index_source.offset = vertex_data_size;
+
+    SDL_GPUBufferRegion index_destination = {0};
+    index_destination.buffer = index_buffer;
+    index_destination.offset = 0;
+    index_destination.size = index_data_size;
+
+    SDL_UploadToGPUBuffer(
+        copy_pass,
+        &index_source,
+        &index_destination,
         false
     );
 
@@ -397,6 +441,10 @@ void shutdown(void) {
             SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
         }
 
+        if (index_buffer) {
+            SDL_ReleaseGPUBuffer(gpu_device, index_buffer);
+        }
+
         if (depth_texture) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);
         }
@@ -506,6 +554,16 @@ bool render(float angle) {
             1
         );
 
+        SDL_GPUBufferBinding index_binding = {0};
+        index_binding.buffer = index_buffer;
+        index_binding.offset = 0;
+
+        SDL_BindGPUIndexBuffer(
+            render_pass,
+            &index_binding,
+            SDL_GPU_INDEXELEMENTSIZE_16BIT
+        );
+
         float aspect =
             (float)swapchain_width / (float)swapchain_height;
         float vertical_fov =
@@ -532,12 +590,13 @@ bool render(float angle) {
             sizeof(uniforms)
         );
 
-        SDL_DrawGPUPrimitives(
+        SDL_DrawGPUIndexedPrimitives(
             render_pass,
-            6,  // six vertices
-            1,  // one face instance
-            0,  // begin at vertex zero
-            0   // begin at instance zero
+            (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
+            1,  // one instance
+            0,  // first index
+            0,  // vertex offset
+            0   // first instance
         );
 
         SDL_EndGPURenderPass(render_pass);
