@@ -381,6 +381,8 @@ bool init(void) {
     pipeline_info.fragment_shader = fragment_shader;
     pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    pipeline_info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+    pipeline_info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;
     pipeline_info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
     pipeline_info.depth_stencil_state.enable_depth_test = true;
     pipeline_info.depth_stencil_state.enable_depth_write = true;
