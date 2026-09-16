@@ -478,7 +478,7 @@ void process_input(bool *quit) {
 }
 
 // -------------------- Render --------------------
-bool render(float angle_x, float angle_y) {
+bool render(float angle_x, float angle_y, float camera_z) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
 
@@ -574,7 +574,7 @@ bool render(float angle_x, float angle_y) {
         Mat4 rotation_x = mat4_rotation_x(angle_x);
         Mat4 rotation_y = mat4_rotation_y(angle_y);
         Mat4 model = mat4_multiply(rotation_y, rotation_x);
-        Mat4 view = mat4_translation(0.0f, 0.0f, 2.0f);
+        Mat4 view = mat4_translation(0.0f, 0.0f, -camera_z);
         Mat4 projection = mat4_perspective_projection(
             vertical_fov,
             aspect,
@@ -619,6 +619,7 @@ void run(void) {
     bool quit = false;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
+    float camera_z = -2.0f;
 
     const float two_pi = 6.28318530718f;
 
@@ -632,9 +633,21 @@ void run(void) {
 
         process_input(&quit);
 
+        const bool *keyboard = SDL_GetKeyboardState(NULL);
+
         if (dt <= 0.1f) {
             angle_x += 1.2f * dt;
             angle_y += 2.0f * dt;
+
+            const float camera_speed = 1.5f;
+
+            if (keyboard[SDL_SCANCODE_W]) {
+                camera_z += camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_S]) {
+                camera_z -= camera_speed * dt;
+            }
         }
 
         if (angle_x >= two_pi) {
@@ -645,7 +658,7 @@ void run(void) {
             angle_y -= two_pi;
         }
 
-        if (!render(angle_x, angle_y)) {
+        if (!render(angle_x, angle_y, camera_z)) {
             quit = true;
         }
     }
