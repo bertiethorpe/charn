@@ -476,7 +476,7 @@ void process_input(bool *quit) {
 }
 
 // -------------------- Render --------------------
-bool render(float angle) {
+bool render(float angle_x, float angle_y) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
 
@@ -569,7 +569,9 @@ bool render(float angle) {
         float vertical_fov =
             80.0f * (3.14159265359f / 180.0f); // radians
 
-        Mat4 model = mat4_rotation_y(angle);
+        Mat4 rotation_x = mat4_rotation_x(angle_x);
+        Mat4 rotation_y = mat4_rotation_y(angle_y);
+        Mat4 model = mat4_multiply(rotation_y, rotation_x);
         Mat4 view = mat4_translation(0.0f, 0.0f, 2.0f);
         Mat4 projection = mat4_perspective_projection(
             vertical_fov,
@@ -613,7 +615,10 @@ bool render(float angle) {
 // -------------------- Game Loop --------------------
 void run(void) {
     bool quit = false;
-    float angle = 0.0f;
+    float angle_x = 0.0f;
+    float angle_y = 0.0f;
+
+    const float two_pi = 6.28318530718f;
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
@@ -626,14 +631,19 @@ void run(void) {
         process_input(&quit);
 
         if (dt <= 0.1f) {
-            angle += 2.0f * dt; // rotate 2 radians per second
+            angle_x += 1.2f * dt;
+            angle_y += 2.0f * dt;
         }
 
-        if (angle >= 6.28318530718f) { // 2 * pi
-            angle -= 6.28318530718f;
+        if (angle_x >= two_pi) {
+            angle_x -= two_pi;
         }
 
-        if (!render(angle)) {
+        if (angle_y >= two_pi) {
+            angle_y -= two_pi;
+        }
+
+        if (!render(angle_x, angle_y)) {
             quit = true;
         }
     }
