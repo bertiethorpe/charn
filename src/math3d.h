@@ -2,14 +2,22 @@
 #define MATH3D_H
 
 typedef struct {
-    float values[16];
-} Mat4;
-
-typedef struct {
     float x;
     float y;
     float z;
 } Vec3;
+
+typedef struct {
+    float values[16];
+} Mat4;
+
+Vec3 vec3_add(Vec3 left, Vec3 right);
+Vec3 vec3_subtract(Vec3 left, Vec3 right);
+Vec3 vec3_scale(Vec3 vector, float scale);
+float vec3_dot(Vec3 left, Vec3 right);
+Vec3 vec3_cross(Vec3 left, Vec3 right);
+float vec3_length(Vec3 vector);
+Vec3 vec3_normalise(Vec3 vector);
 
 Mat4 mat4_identity(void);
 Mat4 mat4_multiply(Mat4 left, Mat4 right);

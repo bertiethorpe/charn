@@ -2,6 +2,65 @@
 
 #include "math3d.h"
 
+
+Vec3 vec3_add(Vec3 left, Vec3 right) {
+    return (Vec3){
+        .x = left.x + right.x,
+        .y = left.y + right.y,
+        .z = left.z + right.z
+    };
+}
+
+Vec3 vec3_subtract(Vec3 left, Vec3 right) {
+    return (Vec3){
+        .x = left.x - right.x,
+        .y = left.y - right.y,
+        .z = left.z - right.z
+    };
+}
+
+Vec3 vec3_scale(Vec3 vector, float scale) {
+    return (Vec3){
+        .x = vector.x * scale,
+        .y = vector.y * scale,
+        .z = vector.z * scale
+    };
+}
+
+float vec3_dot(Vec3 left, Vec3 right) {
+    return
+        left.x * right.x +
+        left.y * right.y +
+        left.z * right.z
+    ;
+}
+
+Vec3 vec3_cross(Vec3 left, Vec3 right) {
+    return (Vec3){
+        .x = (left.y * right.z) - (left.z * right.y),
+        .y = (left.z * right.x) - (left.x * right.z),
+        .z = (left.x * right.y) - (left.y * right.x)
+    };
+}
+
+float vec3_length(Vec3 vector) {
+    return sqrt(
+        vector.x * vector.x +
+        vector.y * vector.y +
+        vector.z * vector.z
+    );
+}
+
+Vec3 vec3_normalise(Vec3 vector) {
+    float length = vec3_length(vector);
+
+    if (length <= 0.000001f) {
+        return (Vec3){0.0f, 0.0f, 0.0f};
+    }
+
+    return vec3_scale(vector, 1.0f / length);
+}
+
 Mat4 mat4_identity(void) {
     return (Mat4){
         .values = {
