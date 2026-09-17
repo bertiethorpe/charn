@@ -478,7 +478,11 @@ void process_input(bool *quit) {
 }
 
 // -------------------- Render --------------------
-bool render(float angle_x, float angle_y, float camera_z) {
+bool render(
+    float angle_x,
+    float angle_y,
+    Vec3 camera_position
+) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
 
@@ -574,7 +578,13 @@ bool render(float angle_x, float angle_y, float camera_z) {
         Mat4 rotation_x = mat4_rotation_x(angle_x);
         Mat4 rotation_y = mat4_rotation_y(angle_y);
         Mat4 model = mat4_multiply(rotation_y, rotation_x);
-        Mat4 view = mat4_translation(0.0f, 0.0f, -camera_z);
+
+        Mat4 view = mat4_translation(
+            -camera_position.x,
+            -camera_position.y,
+            -camera_position.z
+        );
+
         Mat4 projection = mat4_perspective_projection(
             vertical_fov,
             aspect,
@@ -619,9 +629,14 @@ void run(void) {
     bool quit = false;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
-    float camera_z = -2.0f;
+    Vec3 camera_position = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .z = -2.0f
+    };
 
     const float two_pi = 6.28318530718f;
+    const float camera_speed = 1.5f;
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
@@ -639,14 +654,28 @@ void run(void) {
             angle_x += 1.2f * dt;
             angle_y += 2.0f * dt;
 
-            const float camera_speed = 1.5f;
-
             if (keyboard[SDL_SCANCODE_W]) {
-                camera_z += camera_speed * dt;
+                camera_position.z += camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_S]) {
-                camera_z -= camera_speed * dt;
+                camera_position.z -= camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_A]) {
+                camera_position.x -= camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_D]) {
+                camera_position.x += camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_SPACE]) {
+                camera_position.y += camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_LSHIFT]) {
+                camera_position.y -= camera_speed * dt;
             }
         }
 
@@ -658,7 +687,7 @@ void run(void) {
             angle_y -= two_pi;
         }
 
-        if (!render(angle_x, angle_y, camera_z)) {
+        if (!render(angle_x, angle_y, camera_position)) {
             quit = true;
         }
     }

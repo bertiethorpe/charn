@@ -5,6 +5,12 @@ typedef struct {
     float values[16];
 } Mat4;
 
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Vec3;
+
 Mat4 mat4_identity(void);
 Mat4 mat4_multiply(Mat4 left, Mat4 right);
 Mat4 mat4_translation(float x, float y, float z);
