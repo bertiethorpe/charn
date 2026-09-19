@@ -434,6 +434,16 @@ bool init(void) {
     fragment_shader = NULL;
 
     SDL_SetWindowPosition(window, 50, 100);
+
+    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+        SDL_Log(
+            "Could not enable relative mouse mode: %s",
+            SDL_GetError()
+        );
+        shutdown();
+        return false;
+    }
+
     return true;
 }
 
@@ -477,7 +487,10 @@ void shutdown(void) {
 }
 
 // -------------------- Input --------------------
-void process_input(bool *quit) {
+void process_input(bool *quit, Camera *camera) {
+    const float mouse_sensitivity = 0.0025f;
+    const float maximum_pitch = 1.553343f;
+
     SDL_Event event;
 
     while (SDL_PollEvent(&event)) {
@@ -487,6 +500,21 @@ void process_input(bool *quit) {
         else if (event.type == SDL_EVENT_KEY_DOWN) {
             if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
                 *quit = true;
+            }
+        }
+        else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            camera->yaw += // pointers reqquired because modifies actual camera
+                event.motion.xrel * mouse_sensitivity;
+
+            camera->pitch -=
+                event.motion.yrel * mouse_sensitivity;
+
+            if (camera->pitch < -maximum_pitch) {
+                camera->pitch = maximum_pitch;
+            }
+
+            if (camera->pitch > maximum_pitch) {
+                camera->pitch = maximum_pitch;
             }
         }
     }
@@ -703,8 +731,6 @@ void run(void) {
 
     const float two_pi = 6.28318530718f;
     const float camera_speed = 1.5f;
-    const float camera_turn_speed = 1.5f;
-    const float maximum_pitch = 1.553343f; // 89 degrees
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
@@ -714,37 +740,13 @@ void run(void) {
         float dt = (float)(now - last) / (float)frequency;
         last = now;
 
-        process_input(&quit);
+        process_input(&quit, &camera);
 
         const bool *keyboard = SDL_GetKeyboardState(NULL);
 
         if (dt <= 0.1f) {
             angle_x += 1.2f * dt;
             angle_y += 2.0f * dt;
-
-            if (keyboard[SDL_SCANCODE_LEFT]) {
-                camera.yaw -= camera_turn_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_RIGHT]) {
-                camera.yaw += camera_turn_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_UP]) {
-                camera.pitch += camera_turn_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_DOWN]) {
-                camera.pitch -= camera_turn_speed * dt;
-            }
-
-            if (camera.pitch > maximum_pitch) {
-                camera.pitch = maximum_pitch;
-            }
-
-            if (camera.pitch < -maximum_pitch) {
-                camera.pitch = -maximum_pitch;
-            }
 
             Vec3 camera_forward = camera_forward_direction(camera);
 
