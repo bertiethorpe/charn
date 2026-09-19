@@ -503,14 +503,14 @@ void process_input(bool *quit, Camera *camera) {
             }
         }
         else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-            camera->yaw += // pointers reqquired because modifies actual camera
+            camera->yaw += // pointer required because this modifies the actual camera.
                 event.motion.xrel * mouse_sensitivity;
 
             camera->pitch -=
                 event.motion.yrel * mouse_sensitivity;
 
             if (camera->pitch < -maximum_pitch) {
-                camera->pitch = maximum_pitch;
+                camera->pitch = -maximum_pitch;
             }
 
             if (camera->pitch > maximum_pitch) {
