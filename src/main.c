@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <math.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
@@ -36,6 +37,12 @@ typedef struct {
 typedef struct {
     Mat4 transform;
 } VertexUniforms;
+
+typedef struct {
+    Vec3 position;
+    float yaw;
+    float pitch;
+} Camera;
 
 static const Uint16 cube_indices[] = {
     0, 1, 2, 0, 2, 3,  // front:  -Z
@@ -481,7 +488,7 @@ void process_input(bool *quit) {
 bool render(
     float angle_x,
     float angle_y,
-    Vec3 camera_position
+    Camera camera
 ) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
@@ -579,10 +586,27 @@ bool render(
         Mat4 rotation_y = mat4_rotation_y(angle_y);
         Mat4 model = mat4_multiply(rotation_y, rotation_x);
 
-        Mat4 view = mat4_translation(
-            -camera_position.x,
-            -camera_position.y,
-            -camera_position.z
+        Vec3 camera_forward = {
+            .x = cosf(camera.pitch) * sinf(camera.yaw),
+            .y = sinf(camera.pitch),
+            .z = cosf(camera.pitch) * cosf(camera.yaw)
+        };
+
+        Vec3 camera_target = vec3_add(
+            camera.position,
+            camera_forward
+        );
+
+        Vec3 world_up = {
+            .x = 0.0f,
+            .y = 1.0f,
+            .z = 0.0f
+        };
+
+        Mat4 view = mat4_look_at(
+            camera.position,
+            camera_target,
+            world_up
         );
 
         Mat4 projection = mat4_perspective_projection(
@@ -629,14 +653,20 @@ void run(void) {
     bool quit = false;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
-    Vec3 camera_position = {
-        .x = 0.0f,
-        .y = 0.0f,
-        .z = -2.0f
+    Camera camera = {
+        .position = {
+            .x = 0.0f,
+            .y = 0.0f,
+            .z = -2.0f
+        },
+        .yaw = 0.0f,
+        .pitch = 0.0f
     };
 
     const float two_pi = 6.28318530718f;
     const float camera_speed = 1.5f;
+    const float camera_turn_speed = 1.5f;
+    const float maximum_pitch = 1.553343f; // 89 degrees
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
@@ -655,27 +685,51 @@ void run(void) {
             angle_y += 2.0f * dt;
 
             if (keyboard[SDL_SCANCODE_W]) {
-                camera_position.z += camera_speed * dt;
+                camera.position.z += camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_S]) {
-                camera_position.z -= camera_speed * dt;
+                camera.position.z -= camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_A]) {
-                camera_position.x -= camera_speed * dt;
+                camera.position.x -= camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_D]) {
-                camera_position.x += camera_speed * dt;
+                camera.position.x += camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_SPACE]) {
-                camera_position.y += camera_speed * dt;
+                camera.position.y += camera_speed * dt;
             }
 
             if (keyboard[SDL_SCANCODE_LSHIFT]) {
-                camera_position.y -= camera_speed * dt;
+                camera.position.y -= camera_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_LEFT]) {
+                camera.yaw -= camera_turn_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_RIGHT]) {
+                camera.yaw += camera_turn_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_UP]) {
+                camera.pitch += camera_turn_speed * dt;
+            }
+
+            if (keyboard[SDL_SCANCODE_DOWN]) {
+                camera.pitch -= camera_turn_speed * dt;
+            }
+
+            if (camera.pitch > maximum_pitch) {
+                camera.pitch = maximum_pitch;
+            }
+
+            if (camera.pitch < -maximum_pitch) {
+                camera.pitch = -maximum_pitch;
             }
         }
 
@@ -687,7 +741,7 @@ void run(void) {
             angle_y -= two_pi;
         }
 
-        if (!render(angle_x, angle_y, camera_position)) {
+        if (!render(angle_x, angle_y, camera)) {
             quit = true;
         }
     }

@@ -30,5 +30,6 @@ Mat4 mat4_perspective_projection(
     float near_plane,
     float far_plane
 );
+Mat4 mat4_look_at(Vec3 eye, Vec3 target, Vec3 world_up);
 
 #endif

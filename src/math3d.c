@@ -44,7 +44,7 @@ Vec3 vec3_cross(Vec3 left, Vec3 right) {
 }
 
 float vec3_length(Vec3 vector) {
-    return sqrt(
+    return sqrtf(
         vector.x * vector.x +
         vector.y * vector.y +
         vector.z * vector.z
@@ -141,6 +141,21 @@ Mat4 mat4_perspective_projection(
             0.0f,                  0.0f,         far_plane / depth_range, 1.0f,
             0.0f,                  0.0f,        -near_plane * far_plane /
                                                     depth_range,          0.0f
+        }
+    };
+}
+
+Mat4 mat4_look_at(Vec3 eye, Vec3 target, Vec3 world_up) {
+    Vec3 forward = vec3_normalise(vec3_subtract(target, eye));
+    Vec3 right = vec3_normalise(vec3_cross(world_up, forward));
+    Vec3 up = vec3_cross(forward, right);
+
+    return (Mat4){
+        .values = {
+            right.x,              up.x,              forward.x,              0.0f,
+            right.y,              up.y,              forward.y,              0.0f,
+            right.z,              up.z,              forward.z,              0.0f,
+            -vec3_dot(right, eye), -vec3_dot(up, eye), -vec3_dot(forward, eye), 1.0f
         }
     };
 }
