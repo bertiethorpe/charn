@@ -44,6 +44,14 @@ typedef struct {
     float pitch;
 } Camera;
 
+static Vec3 camera_forward_direction(Camera camera) {
+    return (Vec3){
+        .x = cosf(camera.pitch) * sinf(camera.yaw),
+        .y = sinf(camera.pitch),
+        .z = cosf(camera.pitch) * cosf(camera.yaw)
+    };
+}
+
 static const Uint16 cube_indices[] = {
     0, 1, 2, 0, 2, 3,  // front:  -Z
     4, 7, 6, 4, 6, 5,  // back:   +Z
@@ -584,13 +592,9 @@ bool render(
 
         Mat4 rotation_x = mat4_rotation_x(angle_x);
         Mat4 rotation_y = mat4_rotation_y(angle_y);
-        Mat4 model = mat4_multiply(rotation_y, rotation_x);
+        Mat4 rotating_model = mat4_multiply(rotation_y, rotation_x);
 
-        Vec3 camera_forward = {
-            .x = cosf(camera.pitch) * sinf(camera.yaw),
-            .y = sinf(camera.pitch),
-            .z = cosf(camera.pitch) * cosf(camera.yaw)
-        };
+        Vec3 camera_forward = camera_forward_direction(camera);
 
         Vec3 camera_target = vec3_add(
             camera.position,
@@ -616,7 +620,7 @@ bool render(
             100.0f
         );
 
-        Mat4 view_model = mat4_multiply(view, model);
+        Mat4 view_model = mat4_multiply(view, rotating_model);
         VertexUniforms uniforms = {
             .transform = mat4_multiply(projection, view_model)
         };
@@ -635,6 +639,40 @@ bool render(
             0,  // first index
             0,  // vertex offset
             0   // first instance
+        );
+
+        Mat4 static_model = mat4_translation(
+            1.5f,
+            0.0f,
+            1.0f
+        );
+
+        Mat4 static_view_model = mat4_multiply(
+            view,
+            static_model
+        );
+
+        VertexUniforms static_uniforms = {
+            .transform = mat4_multiply(
+                projection,
+                static_view_model
+            )
+        };
+
+        SDL_PushGPUVertexUniformData(
+            command_buffer,
+            0,
+            &static_uniforms,
+            sizeof(static_uniforms)
+        );
+
+        SDL_DrawGPUIndexedPrimitives(
+            render_pass,
+            (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
+            1,
+            0,
+            0,
+            0
         );
 
         SDL_EndGPURenderPass(render_pass);
@@ -684,30 +722,6 @@ void run(void) {
             angle_x += 1.2f * dt;
             angle_y += 2.0f * dt;
 
-            if (keyboard[SDL_SCANCODE_W]) {
-                camera.position.z += camera_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_S]) {
-                camera.position.z -= camera_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_A]) {
-                camera.position.x -= camera_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_D]) {
-                camera.position.x += camera_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_SPACE]) {
-                camera.position.y += camera_speed * dt;
-            }
-
-            if (keyboard[SDL_SCANCODE_LSHIFT]) {
-                camera.position.y -= camera_speed * dt;
-            }
-
             if (keyboard[SDL_SCANCODE_LEFT]) {
                 camera.yaw -= camera_turn_speed * dt;
             }
@@ -730,6 +744,62 @@ void run(void) {
 
             if (camera.pitch < -maximum_pitch) {
                 camera.pitch = -maximum_pitch;
+            }
+
+            Vec3 camera_forward = camera_forward_direction(camera);
+
+            Vec3 movement_forward = vec3_normalise((Vec3){
+                .x = camera_forward.x,
+                .y = 0.0f,
+                .z = camera_forward.z
+            });
+
+            Vec3 world_up = {
+                .x = 0.0f,
+                .y = 1.0f,
+                .z = 0.0f
+            };
+
+            Vec3 camera_right = vec3_normalise(
+                vec3_cross(world_up, movement_forward)
+            );
+
+            float movement_distance = camera_speed * dt;
+
+            if (keyboard[SDL_SCANCODE_W]) {
+                camera.position = vec3_add(
+                    camera.position,
+                    vec3_scale(movement_forward, movement_distance)
+                );
+            }
+
+            if (keyboard[SDL_SCANCODE_S]) {
+                camera.position = vec3_subtract(
+                    camera.position,
+                    vec3_scale(movement_forward, movement_distance)
+                );
+            }
+
+            if (keyboard[SDL_SCANCODE_A]) {
+                camera.position = vec3_subtract(
+                    camera.position,
+                    vec3_scale(camera_right, movement_distance)
+                );
+            }
+
+            if (keyboard[SDL_SCANCODE_D]) {
+                camera.position = vec3_add(
+                    camera.position,
+                    vec3_scale(camera_right, movement_distance)
+                );
+            }
+
+            if (keyboard[SDL_SCANCODE_SPACE]) {
+                camera.position.y += movement_distance;
+            }
+
+            if (keyboard[SDL_SCANCODE_LSHIFT]) {
+                camera.position.y -= movement_distance;
             }
         }
 
