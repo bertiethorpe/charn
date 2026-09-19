@@ -4,11 +4,13 @@ using namespace metal;
 struct VertexInput {
     float3 position [[attribute(0)]];
     float4 color    [[attribute(1)]];
+    float2 uv       [[attribute(2)]];
 };
 
 struct VertexOutput {
     float4 position [[position]];
     float4 color;
+    float2 uv;
 };
 
 struct VertexUniforms {
@@ -22,5 +24,6 @@ vertex VertexOutput vertex_main(
     VertexOutput output;
     output.position = uniforms.transform * float4(input.position, 1.0);
     output.color = input.color;
+    output.uv = input.uv;
     return output;
 }
