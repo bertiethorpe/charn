@@ -53,16 +53,16 @@ static Vec3 camera_forward_direction(Camera camera) {
 }
 
 static const Uint16 cube_indices[] = {
-    0, 1, 2, 0, 2, 3,  // front:  -Z
-    4, 7, 6, 4, 6, 5,  // back:   +Z
-    4, 5, 1, 4, 1, 0,  // left:   -X
-    3, 2, 6, 3, 6, 7,  // right:  +X
-    1, 5, 6, 1, 6, 2,  // top:    +Y
-    4, 0, 3, 4, 3, 7   // bottom: -Y
+     0,  1,  2,  0,  2,  3,  // front:  -Z
+     4,  5,  6,  4,  6,  7,  // back:   +Z
+     8,  9, 10,  8, 10, 11,  // left:   -X
+    12, 13, 14, 12, 14, 15,  // right:  +X
+    16, 17, 18, 16, 18, 19,  // top:    +Y
+    20, 21, 22, 20, 22, 23   // bottom: -Y
 };
 
 static const Vertex cube_vertices[] = {
-    // Front: z = -0.5
+    // Front: -Z
     { .position = {-0.5f, -0.5f, -0.5f},
       .color    = { 1.0f,  0.0f,  0.0f, 1.0f} }, // 0
     { .position = {-0.5f,  0.5f, -0.5f},
@@ -72,15 +72,55 @@ static const Vertex cube_vertices[] = {
     { .position = { 0.5f, -0.5f, -0.5f},
       .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }, // 3
 
-    // Back: z = +0.5
+    // Back: +Z
     { .position = {-0.5f, -0.5f,  0.5f},
       .color    = { 0.0f,  1.0f,  1.0f, 1.0f} }, // 4
-    { .position = {-0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  0.0f,  1.0f, 1.0f} }, // 5
+    { .position = { 0.5f, -0.5f,  0.5f},
+      .color    = { 1.0f,  0.5f,  0.0f, 1.0f} }, // 5
     { .position = { 0.5f,  0.5f,  0.5f},
       .color    = { 1.0f,  1.0f,  1.0f, 1.0f} }, // 6
+    { .position = {-0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  0.0f,  1.0f, 1.0f} }, // 7
+
+    // Left: -X
+    { .position = {-0.5f, -0.5f,  0.5f},
+      .color    = { 0.0f,  1.0f,  1.0f, 1.0f} }, // 8
+    { .position = {-0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  0.0f,  1.0f, 1.0f} }, // 9
+    { .position = {-0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  1.0f,  0.0f, 1.0f} }, // 10
+    { .position = {-0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} }, // 11
+
+    // Right: +X
+    { .position = { 0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }, // 12
+    { .position = { 0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} }, // 13
+    { .position = { 0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  1.0f,  1.0f, 1.0f} }, // 14
     { .position = { 0.5f, -0.5f,  0.5f},
-      .color    = { 1.0f,  0.5f,  0.0f, 1.0f} }  // 7
+      .color    = { 1.0f,  0.5f,  0.0f, 1.0f} }, // 15
+
+    // Top: +Y
+    { .position = {-0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  1.0f,  0.0f, 1.0f} }, // 16
+    { .position = {-0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  0.0f,  1.0f, 1.0f} }, // 17
+    { .position = { 0.5f,  0.5f,  0.5f},
+      .color    = { 1.0f,  1.0f,  1.0f, 1.0f} }, // 18
+    { .position = { 0.5f,  0.5f, -0.5f},
+      .color    = { 0.0f,  0.0f,  1.0f, 1.0f} }, // 19
+
+    // Bottom: -Y
+    { .position = {-0.5f, -0.5f,  0.5f},
+      .color    = { 0.0f,  1.0f,  1.0f, 1.0f} }, // 20
+    { .position = {-0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  0.0f,  0.0f, 1.0f} }, // 21
+    { .position = { 0.5f, -0.5f, -0.5f},
+      .color    = { 1.0f,  1.0f,  0.0f, 1.0f} }, // 22
+    { .position = { 0.5f, -0.5f,  0.5f},
+      .color    = { 1.0f,  0.5f,  0.0f, 1.0f} }  // 23
 };
 
 static bool ensure_depth_texture(
@@ -616,7 +656,7 @@ bool render(
         float aspect =
             (float)swapchain_width / (float)swapchain_height;
         float vertical_fov =
-            80.0f * (3.14159265359f / 180.0f); // radians
+            60.0f * (3.14159265359f / 180.0f); // radians
 
         Mat4 rotation_x = mat4_rotation_x(angle_x);
         Mat4 rotation_y = mat4_rotation_y(angle_y);
