@@ -7,10 +7,29 @@ struct VertexInput {
     float2 uv;
 };
 
+struct FragmentUniforms {
+    float4 texture_mix;
+};
+
 fragment float4 fragment_main(
     VertexInput input [[stage_in]],
     texture2d<float> color_texture [[texture(0)]],
-    sampler color_sampler [[sampler(0)]])
+    sampler color_sampler [[sampler(0)]],
+    constant FragmentUniforms &uniforms [[buffer(0)]])
 {
-    return color_texture.sample(color_sampler, input.uv);
+    float4 uv_color = float4(
+        input.uv.x,
+        input.uv.y,
+        0.0,
+        1.0
+    );
+
+    float4 texture_color =
+        color_texture.sample(color_sampler, input.uv);
+    
+    return mix(
+        uv_color,
+        texture_color,
+        uniforms.texture_mix.x
+    );
 }

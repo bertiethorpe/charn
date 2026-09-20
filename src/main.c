@@ -47,6 +47,10 @@ typedef struct {
 } VertexUniforms;
 
 typedef struct {
+    float texture_mix[4];
+} FragmentUniforms;
+
+typedef struct {
     Vec3 position;
     float yaw;
     float pitch;
@@ -525,6 +529,7 @@ bool init(void) {
     fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
     fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
     fragment_shader_info.num_samplers = 1;
+    fragment_shader_info.num_uniform_buffers = 1;
 
     fragment_shader = SDL_CreateGPUShader(
         gpu_device,
@@ -675,7 +680,7 @@ void shutdown(void) {
 }
 
 // -------------------- Input --------------------
-void process_input(bool *quit, Camera *camera) {
+void process_input(bool *quit, Camera *camera, bool *show_texture) {
     const float mouse_sensitivity = 0.0025f;
     const float maximum_pitch = 1.553343f;
 
@@ -688,6 +693,12 @@ void process_input(bool *quit, Camera *camera) {
         else if (event.type == SDL_EVENT_KEY_DOWN) {
             if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
                 *quit = true;
+            }
+            else if (
+                event.key.scancode == SDL_SCANCODE_T &&
+                !event.key.repeat
+            ) {
+                *show_texture = !*show_texture;
             }
         }
         else if (event.type == SDL_EVENT_MOUSE_MOTION) {
@@ -712,7 +723,8 @@ void process_input(bool *quit, Camera *camera) {
 bool render(
     float angle_x,
     float angle_y,
-    Camera camera
+    Camera camera,
+    bool show_texture
 ) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
@@ -811,6 +823,22 @@ bool render(
             0,
             &checker_binding,
             1
+        );
+
+        FragmentUniforms fragment_uniforms = {
+            .texture_mix = {
+                show_texture ? 1.0f : 0.0f,
+                0.0f,
+                0.0f,
+                0.0f
+            }
+        };
+
+        SDL_PushGPUFragmentUniformData(
+            command_buffer,
+            0,
+            &fragment_uniforms,
+            sizeof(fragment_uniforms)
         );
 
         float aspect =
@@ -917,6 +945,7 @@ bool render(
 // -------------------- Game Loop --------------------
 void run(void) {
     bool quit = false;
+    bool show_texture = true;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
     Camera camera = {
@@ -940,7 +969,7 @@ void run(void) {
         float dt = (float)(now - last) / (float)frequency;
         last = now;
 
-        process_input(&quit, &camera);
+        process_input(&quit, &camera, &show_texture);
 
         const bool *keyboard = SDL_GetKeyboardState(NULL);
 
@@ -1013,7 +1042,7 @@ void run(void) {
             angle_y -= two_pi;
         }
 
-        if (!render(angle_x, angle_y, camera)) {
+        if (!render(angle_x, angle_y, camera, show_texture)) {
             quit = true;
         }
     }
