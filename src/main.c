@@ -38,7 +38,6 @@ static Uint32 depth_texture_height = 0;
 // ------------------------- Data --------------------------
 typedef struct {
     float position[3];
-    float color[4];
     float uv[2];
 } Vertex;
 
@@ -76,86 +75,62 @@ static const Uint16 cube_indices[] = {
 static const Vertex cube_vertices[] = {
     // Front: -Z
     { .position = {-0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  0.0f,  0.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 0
     { .position = {-0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 1
     { .position = { 0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 2
     { .position = { 0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }, // 3
 
     // Back: +Z
     { .position = {-0.5f, -0.5f,  0.5f},
-      .color    = { 0.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }, // 4
     { .position = { 0.5f, -0.5f,  0.5f},
-      .color    = { 1.0f,  0.5f,  0.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 5
     { .position = { 0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 6
     { .position = {-0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 7
 
     // Left: -X
     { .position = {-0.5f, -0.5f,  0.5f},
-      .color    = { 0.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 8
     { .position = {-0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 9
     { .position = {-0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 10
     { .position = {-0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  0.0f,  0.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }, // 11
 
     // Right: +X
     { .position = { 0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 12
     { .position = { 0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 13
     { .position = { 0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 14
     { .position = { 0.5f, -0.5f,  0.5f},
-      .color    = { 1.0f,  0.5f,  0.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }, // 15
 
     // Top: +Y
     { .position = {-0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 16
     { .position = {-0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 17
     { .position = { 0.5f,  0.5f,  0.5f},
-      .color    = { 1.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 18
     { .position = { 0.5f,  0.5f, -0.5f},
-      .color    = { 0.0f,  0.0f,  1.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }, // 19
 
     // Bottom: -Y
     { .position = {-0.5f, -0.5f,  0.5f},
-      .color    = { 0.0f,  1.0f,  1.0f, 1.0f},
       .uv       = { 0.0f,  1.0f} }, // 20
     { .position = {-0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  0.0f,  0.0f, 1.0f},
       .uv       = { 0.0f,  0.0f} }, // 21
     { .position = { 0.5f, -0.5f, -0.5f},
-      .color    = { 1.0f,  1.0f,  0.0f, 1.0f},
       .uv       = { 1.0f,  0.0f} }, // 22
     { .position = { 0.5f, -0.5f,  0.5f},
-      .color    = { 1.0f,  0.5f,  0.0f, 1.0f},
       .uv       = { 1.0f,  1.0f} }  // 23
 };
 
@@ -560,7 +535,7 @@ bool init(void) {
     vertex_buffer_description.pitch = sizeof(Vertex);
     vertex_buffer_description.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
 
-    SDL_GPUVertexAttribute vertex_attributes[3] = {0};
+    SDL_GPUVertexAttribute vertex_attributes[2] = {0};
 
     vertex_attributes[0].location = 0;
     vertex_attributes[0].buffer_slot = 0;
@@ -569,13 +544,8 @@ bool init(void) {
 
     vertex_attributes[1].location = 1;
     vertex_attributes[1].buffer_slot = 0;
-    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-    vertex_attributes[1].offset = (Uint32)offsetof(Vertex, color);
-
-    vertex_attributes[2].location = 2;
-    vertex_attributes[2].buffer_slot = 0;
-    vertex_attributes[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-    vertex_attributes[2].offset = (Uint32)offsetof(Vertex, uv);
+    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+    vertex_attributes[1].offset = (Uint32)offsetof(Vertex, uv);
 
     pipeline_info.vertex_shader = vertex_shader;
     pipeline_info.fragment_shader = fragment_shader;
@@ -591,7 +561,7 @@ bool init(void) {
         &vertex_buffer_description;
     pipeline_info.vertex_input_state.num_vertex_buffers = 1;
     pipeline_info.vertex_input_state.vertex_attributes = vertex_attributes;
-    pipeline_info.vertex_input_state.num_vertex_attributes = 3;
+    pipeline_info.vertex_input_state.num_vertex_attributes = 2;
 
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions =
