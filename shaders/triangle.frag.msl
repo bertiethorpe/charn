@@ -3,6 +3,7 @@ using namespace metal;
 
 struct VertexInput {
     float4 position [[position]];
+    float3 normal;
     float2 uv;
 };
 
@@ -25,10 +26,35 @@ fragment float4 fragment_main(
 
     float4 texture_color =
         color_texture.sample(color_sampler, input.uv);
-    
+
+    float3 normal = normalize(input.normal); 
+
+    float3 light_direction = normalize(
+        float3(-1.0, 1.0, -1.0)
+    );
+
+    float diffuse_strength = max(
+        dot(normal, light_direction),
+        0.0
+    );
+
+    float ambient_strength = 0.3;
+    float sunlight_strength = 1.0;
+
+    float light_intensity = min(
+        ambient_strength +
+        sunlight_strength * diffuse_strength,
+        1.0
+    );
+
+    float4 lit_texture_color = float4(
+        texture_color.rgb * light_intensity,
+        texture_color.a
+    );
+
     return mix(
         uv_color,
-        texture_color,
+        lit_texture_color,
         uniforms.texture_mix.x
     );
 }
