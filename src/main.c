@@ -20,6 +20,13 @@ static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
 static SDL_GPUBuffer *vertex_buffer = NULL;
 static SDL_GPUBuffer *index_buffer = NULL;
 
+static SDL_GPUTexture *checker_texture = NULL;
+static SDL_GPUSampler *texture_sampler = NULL;
+static const Uint32 checker_texture_width = 16;
+static const Uint32 checker_texture_height = 16;
+static const Uint32 checker_square_size = 4;
+static const Uint32 checker_bytes_per_pixel = 4;
+
 static SDL_GPUTexture *depth_texture = NULL;
 
 static const SDL_GPUTextureFormat depth_texture_format =
@@ -80,16 +87,16 @@ static const Vertex cube_vertices[] = {
     // Back: +Z
     { .position = {-0.5f, -0.5f,  0.5f},
       .color    = { 0.0f,  1.0f,  1.0f, 1.0f},
-      .uv       = { 0.0f,  1.0f} }, // 4
+      .uv       = { 1.0f,  1.0f} }, // 4
     { .position = { 0.5f, -0.5f,  0.5f},
       .color    = { 1.0f,  0.5f,  0.0f, 1.0f},
-      .uv       = { 0.0f,  0.0f} }, // 5
+      .uv       = { 0.0f,  1.0f} }, // 5
     { .position = { 0.5f,  0.5f,  0.5f},
       .color    = { 1.0f,  1.0f,  1.0f, 1.0f},
-      .uv       = { 1.0f,  0.0f} }, // 6
+      .uv       = { 0.0f,  0.0f} }, // 6
     { .position = {-0.5f,  0.5f,  0.5f},
       .color    = { 1.0f,  0.0f,  1.0f, 1.0f},
-      .uv       = { 1.0f,  1.0f} }, // 7
+      .uv       = { 1.0f,  0.0f} }, // 7
 
     // Left: -X
     { .position = {-0.5f, -0.5f,  0.5f},
@@ -235,8 +242,62 @@ bool init(void) {
         return false;
     }
 
+    SDL_GPUTextureCreateInfo checker_texture_info = {0};
+
+    checker_texture_info.type = SDL_GPU_TEXTURETYPE_2D;
+    checker_texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    checker_texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    checker_texture_info.width = checker_texture_width;
+    checker_texture_info.height = checker_texture_height;
+    checker_texture_info.layer_count_or_depth = 1;
+    checker_texture_info.num_levels = 1;
+    checker_texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+    checker_texture = SDL_CreateGPUTexture(
+        gpu_device,
+        &checker_texture_info
+    );
+
+    if (!checker_texture) {
+        SDL_Log(
+            "Could not create checker texture: %s",
+            SDL_GetError()
+        );
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUSamplerCreateInfo sampler_info = {0};
+
+    sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
+    sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
+    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+
+    texture_sampler = SDL_CreateGPUSampler(
+        gpu_device,
+        &sampler_info
+    );
+
+    if (!texture_sampler) {
+        SDL_Log(
+            "Could not create texture sampler: %s",
+            SDL_GetError()
+        );
+        shutdown();
+        return false;
+    }
+
     const Uint32 vertex_data_size = (Uint32)sizeof(cube_vertices);
     const Uint32 index_data_size = (Uint32)sizeof(cube_indices);
+    const Uint32 checker_data_size =
+        checker_texture_width *
+        checker_texture_height *
+        checker_bytes_per_pixel;
+    const Uint32 checker_data_offset =
+        (vertex_data_size + index_data_size + 3u) & ~3u; // round up to four-byte
 
     SDL_GPUBufferCreateInfo vertex_buffer_info = {0};
     vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
@@ -262,7 +323,7 @@ bool init(void) {
 
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transfer_info.size = vertex_data_size + index_data_size;
+    transfer_info.size = checker_data_offset + checker_data_size;
 
     SDL_GPUTransferBuffer *transfer_buffer = SDL_CreateGPUTransferBuffer(
         gpu_device,
@@ -299,6 +360,27 @@ bool init(void) {
         cube_indices,
         index_data_size
     );
+
+    Uint8 *checker_pixels = (Uint8 *)mapped_data + checker_data_offset;
+
+    for (Uint32 y = 0; y < checker_texture_height; ++y) {
+        for (Uint32 x = 0; x < checker_texture_width; ++x) {
+            bool bright_square =
+                ((x / checker_square_size) +
+                 (y / checker_square_size)) % 2u == 0u;
+
+            Uint8 color = bright_square ? 255 : 32;
+
+            Uint32 pixel_offset =
+                (y * checker_texture_width + x) *
+                checker_bytes_per_pixel;
+
+            checker_pixels[pixel_offset + 0] = color;
+            checker_pixels[pixel_offset + 1] = color;
+            checker_pixels[pixel_offset + 2] = color;
+            checker_pixels[pixel_offset + 3] = 255;
+        }
+    }
 
     SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
 
@@ -347,6 +429,32 @@ bool init(void) {
         false
     );
 
+    SDL_GPUTextureTransferInfo checker_source = {0};
+
+    checker_source.transfer_buffer = transfer_buffer;
+    checker_source.offset = checker_data_offset;
+    checker_source.pixels_per_row = checker_texture_width;
+    checker_source.rows_per_layer = checker_texture_height;
+
+    SDL_GPUTextureRegion checker_destination = {0};
+
+    checker_destination.texture = checker_texture;
+    checker_destination.mip_level = 0;
+    checker_destination.layer = 0;
+    checker_destination.x = 0;
+    checker_destination.y = 0;
+    checker_destination.z = 0;
+    checker_destination.w = checker_texture_width;
+    checker_destination.h = checker_texture_height;
+    checker_destination.d = 1;
+
+    SDL_UploadToGPUTexture(
+        copy_pass,
+        &checker_source,
+        &checker_destination,
+        false
+    );
+
     SDL_EndGPUCopyPass(copy_pass);
 
     if (!SDL_SubmitGPUCommandBuffer(upload_commands)) {
@@ -358,7 +466,7 @@ bool init(void) {
 
     SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 
-    SDL_Log("Uploaded face vertices");
+    SDL_Log("Uploaded mesh and checker texture");
 
     size_t vertex_shader_size = 0;
     Uint8 *vertex_shader_code = SDL_LoadFile(
@@ -410,11 +518,13 @@ bool init(void) {
     }
 
     SDL_GPUShaderCreateInfo fragment_shader_info = {0};
+
     fragment_shader_info.code = fragment_shader_code;
     fragment_shader_info.code_size = fragment_shader_size;
     fragment_shader_info.entrypoint = "fragment_main";
     fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
     fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    fragment_shader_info.num_samplers = 1;
 
     fragment_shader = SDL_CreateGPUShader(
         gpu_device,
@@ -544,6 +654,14 @@ void shutdown(void) {
 
         if (depth_texture) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);
+        }
+
+        if (texture_sampler) {
+            SDL_ReleaseGPUSampler(gpu_device, texture_sampler);
+        }
+
+        if (checker_texture) {
+            SDL_ReleaseGPUTexture(gpu_device, checker_texture);
         }
     }
 
@@ -681,6 +799,18 @@ bool render(
             render_pass,
             &index_binding,
             SDL_GPU_INDEXELEMENTSIZE_16BIT
+        );
+
+        SDL_GPUTextureSamplerBinding checker_binding = {0};
+
+        checker_binding.texture = checker_texture;
+        checker_binding.sampler = texture_sampler;
+
+        SDL_BindGPUFragmentSamplers(
+            render_pass,
+            0,
+            &checker_binding,
+            1
         );
 
         float aspect =

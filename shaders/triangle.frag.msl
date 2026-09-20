@@ -7,7 +7,10 @@ struct VertexInput {
     float2 uv;
 };
 
-fragment float4 fragment_main(VertexInput input [[stage_in]])
+fragment float4 fragment_main(
+    VertexInput input [[stage_in]],
+    texture2d<float> color_texture [[texture(0)]],
+    sampler color_sampler [[sampler(0)]])
 {
-    return float4(input.uv.x, input.uv.y, 0.0, 1.0);
+    return color_texture.sample(color_sampler, input.uv);
 }
