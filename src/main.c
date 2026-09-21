@@ -886,62 +886,36 @@ bool render(
             100.0f
         );
 
-        Mat4 view_model = mat4_multiply(view, rotating_model);
-        VertexUniforms uniforms = {
-            .transform = mat4_multiply(projection, view_model),
-            .model = rotating_model
+        Mat4 models[] = {
+            rotating_model,
+            mat4_translation(1.5f, 0.0f, 1.0f)
         };
+        
+        size_t model_count = sizeof(models) / sizeof(models[0]);
+        for (size_t i = 0; i < model_count; ++i) {
+            Mat4 view_model = mat4_multiply(view,models[i]);
 
-        SDL_PushGPUVertexUniformData(
-            command_buffer,
-            0, // corresponds to [[buffer(0)]] in the msl vert shader
-            &uniforms,
-            sizeof(uniforms)
-        );
+            VertexUniforms uniforms = {
+                .transform = mat4_multiply(projection, view_model),
+                .model = models[i]
+            };
 
-        SDL_DrawGPUIndexedPrimitives(
-            render_pass,
-            (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
-            1,  // one instance
-            0,  // first index
-            0,  // vertex offset
-            0   // first instance
-        );
+            SDL_PushGPUVertexUniformData(
+                command_buffer,
+                0,
+                &uniforms,
+                sizeof(uniforms)
+            );
 
-        Mat4 static_model = mat4_translation(
-            1.5f,
-            0.0f,
-            1.0f
-        );
-
-        Mat4 static_view_model = mat4_multiply(
-            view,
-            static_model
-        );
-
-        VertexUniforms static_uniforms = {
-            .transform = mat4_multiply(
-                projection,
-                static_view_model
-            ),
-            .model = static_model
-        };
-
-        SDL_PushGPUVertexUniformData(
-            command_buffer,
-            0,
-            &static_uniforms,
-            sizeof(static_uniforms)
-        );
-
-        SDL_DrawGPUIndexedPrimitives(
-            render_pass,
-            (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
-            1,
-            0,
-            0,
-            0
-        );
+            SDL_DrawGPUIndexedPrimitives(
+                render_pass,
+                (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
+                1,
+                0,
+                0,
+                0
+            );
+        }
 
         SDL_EndGPURenderPass(render_pass);
     }
