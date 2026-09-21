@@ -3,12 +3,18 @@ using namespace metal;
 
 struct VertexInput {
     float4 position [[position]];
+    float3 world_position;
     float3 normal;
     float2 uv;
 };
 
 struct FragmentUniforms {
     float4 texture_mix;
+    float4 light_position;
+    float ambient_strength;
+    float point_light_strength;
+    float falloff_distance;
+    float padding;
 };
 
 fragment float4 fragment_main(
@@ -27,25 +33,24 @@ fragment float4 fragment_main(
     float4 texture_color =
         color_texture.sample(color_sampler, input.uv);
 
-    float3 normal = normalize(input.normal); 
+    float3 normal = normalize(input.normal);
 
-    float3 light_direction = normalize(
-        float3(-1.0, 1.0, -1.0)
-    );
-
+    float3 to_light = uniforms.light_position.xyz - input.world_position;
+    float distance_squared = dot(to_light, to_light);
+    float3 light_direction = normalize(to_light);
     float diffuse_strength = max(
         dot(normal, light_direction),
         0.0
     );
 
-    float ambient_strength = 0.25;
-    float sunlight_strength = 1.0;
-
-    float light_intensity = min(
-        ambient_strength +
-        sunlight_strength * diffuse_strength,
-        1.0
+    float attenuation = 1.0 / (
+        1.0 + distance_squared /
+        (uniforms.falloff_distance * uniforms.falloff_distance)
     );
+
+    float light_intensity =
+        uniforms.ambient_strength +
+        uniforms.point_light_strength * attenuation * diffuse_strength;
 
     float4 lit_texture_color = float4(
         texture_color.rgb * light_intensity,

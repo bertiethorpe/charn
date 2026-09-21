@@ -49,6 +49,11 @@ typedef struct {
 
 typedef struct {
     float texture_mix[4];
+    float light_position[4];
+    float ambient_strength;
+    float point_light_strength;
+    float falloff_distance;
+    float padding;
 } FragmentUniforms;
 
 typedef struct {
@@ -832,7 +837,11 @@ bool render(
                 0.0f,
                 0.0f,
                 0.0f
-            }
+            },
+            .light_position = {-0.75f, 1.25f, -1.25f, 0.0f},
+            .ambient_strength = 0.15f,
+            .point_light_strength = 0.8f,
+            .falloff_distance = 3.0f
         };
 
         SDL_PushGPUFragmentUniformData(
