@@ -49,6 +49,11 @@ typedef struct {
 static Mesh cube_mesh = {0};
 
 typedef struct {
+    Mesh *mesh;
+    Mat4 model;
+} RenderObject;
+
+typedef struct {
     Mat4 transform;
     Mat4 model;
 } VertexUniforms;
@@ -735,6 +740,66 @@ void process_input(bool *quit, Camera *camera, bool *show_texture) {
     }
 }
 
+static void draw_render_object(
+    SDL_GPUCommandBuffer *command_buffer,
+    SDL_GPURenderPass *render_pass,
+    const RenderObject *object,
+    Mat4 view,
+    Mat4 projection
+) {
+    const Mesh *mesh = object->mesh;
+
+    SDL_GPUBufferBinding vertex_binding = {
+        .buffer = mesh->vertex_buffer,
+        .offset = 0
+    };
+
+    SDL_BindGPUVertexBuffers(
+        render_pass,
+        0,
+        &vertex_binding,
+        1
+    );
+
+    SDL_GPUBufferBinding index_binding = {
+        .buffer = mesh->index_buffer,
+        .offset = 0
+    };
+
+    SDL_BindGPUIndexBuffer(
+        render_pass,
+        &index_binding,
+        SDL_GPU_INDEXELEMENTSIZE_16BIT
+    );
+
+    Mat4 view_model = mat4_multiply(
+        view,
+        object->model
+    );
+
+    VertexUniforms uniforms = {
+        .transform = mat4_multiply(projection, view_model),
+        .model = object->model
+    };
+
+    SDL_PushGPUVertexUniformData(
+        command_buffer,
+        0,
+        &uniforms,
+        sizeof(uniforms)
+    );
+
+    SDL_DrawGPUIndexedPrimitives(
+        render_pass,
+        mesh->index_count,
+        1,
+        0,
+        0,
+        0
+    );
+}
+
+
 // -------------------- Render --------------------
 bool render(
     float angle_x,
@@ -808,27 +873,6 @@ bool render(
             graphics_pipeline
         );
 
-        SDL_GPUBufferBinding vertex_binding = {0};
-        vertex_binding.buffer = cube_mesh.vertex_buffer;
-        vertex_binding.offset = 0;
-
-        SDL_BindGPUVertexBuffers(
-            render_pass,
-            0,
-            &vertex_binding,
-            1
-        );
-
-        SDL_GPUBufferBinding index_binding = {0};
-        index_binding.buffer = cube_mesh.index_buffer;
-        index_binding.offset = 0;
-
-        SDL_BindGPUIndexBuffer(
-            render_pass,
-            &index_binding,
-            SDL_GPU_INDEXELEMENTSIZE_16BIT
-        );
-
         SDL_GPUTextureSamplerBinding checker_binding = {0};
 
         checker_binding.texture = checker_texture;
@@ -896,34 +940,27 @@ bool render(
             100.0f
         );
 
-        Mat4 models[] = {
-            rotating_model,
-            mat4_translation(1.5f, 0.0f, 1.0f)
+        RenderObject objects[] = {
+            {
+                .mesh = &cube_mesh,
+                .model = rotating_model
+            },
+            {
+                .mesh = &cube_mesh,
+                .model = mat4_translation(1.5f, 0.0f, 1.0f)
+            }
         };
-        
-        const size_t model_count = sizeof(models) / sizeof(models[0]);
-        for (size_t i = 0; i < model_count; ++i) {
-            Mat4 view_model = mat4_multiply(view, models[i]);
 
-            VertexUniforms uniforms = {
-                .transform = mat4_multiply(projection, view_model),
-                .model = models[i]
-            };
+        const size_t object_count =
+            sizeof(objects) / sizeof(objects[0]);
 
-            SDL_PushGPUVertexUniformData(
+        for (size_t i = 0; i < object_count; ++i) {
+            draw_render_object(
                 command_buffer,
-                0,
-                &uniforms,
-                sizeof(uniforms)
-            );
-
-            SDL_DrawGPUIndexedPrimitives(
                 render_pass,
-                cube_mesh.index_count,
-                1,
-                0,
-                0,
-                0
+                &objects[i],
+                view,
+                projection
             );
         }
 
