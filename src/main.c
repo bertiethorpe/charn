@@ -17,8 +17,6 @@ static SDL_GPUDevice *gpu_device = NULL;
 static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
-static SDL_GPUBuffer *vertex_buffer = NULL;
-static SDL_GPUBuffer *index_buffer = NULL;
 
 static SDL_GPUTexture *checker_texture = NULL;
 static SDL_GPUSampler *texture_sampler = NULL;
@@ -41,6 +39,14 @@ typedef struct {
     float normal[3];
     float uv[2];
 } Vertex;
+
+typedef struct {
+    SDL_GPUBuffer *vertex_buffer;
+    SDL_GPUBuffer *index_buffer;
+    Uint32 index_count;
+} Mesh;
+
+static Mesh cube_mesh = {0};
 
 typedef struct {
     Mat4 transform;
@@ -302,6 +308,8 @@ bool init(void) {
 
     const Uint32 vertex_data_size = (Uint32)sizeof(cube_vertices);
     const Uint32 index_data_size = (Uint32)sizeof(cube_indices);
+    cube_mesh.index_count =
+        (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0]));
     const Uint32 checker_data_size =
         checker_texture_width *
         checker_texture_height *
@@ -313,8 +321,9 @@ bool init(void) {
     vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
     vertex_buffer_info.size = vertex_data_size;
 
-    vertex_buffer = SDL_CreateGPUBuffer(gpu_device, &vertex_buffer_info);
-    if (!vertex_buffer) {
+    cube_mesh.vertex_buffer =
+        SDL_CreateGPUBuffer(gpu_device, &vertex_buffer_info);
+    if (!cube_mesh.vertex_buffer) {
         SDL_Log("Could not create vertex buffer: %s", SDL_GetError());
         shutdown();
         return false;
@@ -324,8 +333,9 @@ bool init(void) {
     index_info.usage = SDL_GPU_BUFFERUSAGE_INDEX;
     index_info.size = index_data_size;
 
-    index_buffer = SDL_CreateGPUBuffer(gpu_device, &index_info);
-    if (!index_buffer) {
+    cube_mesh.index_buffer =
+        SDL_CreateGPUBuffer(gpu_device, &index_info);
+    if (!cube_mesh.index_buffer) {
         SDL_Log("Could not create index buffer: %s", SDL_GetError());
         shutdown();
         return false;
@@ -412,7 +422,7 @@ bool init(void) {
     source.offset = 0;
 
     SDL_GPUBufferRegion destination = {0};
-    destination.buffer = vertex_buffer;
+    destination.buffer = cube_mesh.vertex_buffer;
     destination.offset = 0;
     destination.size = vertex_data_size;
 
@@ -428,7 +438,7 @@ bool init(void) {
     index_source.offset = vertex_data_size;
 
     SDL_GPUBufferRegion index_destination = {0};
-    index_destination.buffer = index_buffer;
+    index_destination.buffer = cube_mesh.index_buffer;
     index_destination.offset = 0;
     index_destination.size = index_data_size;
 
@@ -655,12 +665,12 @@ void shutdown(void) {
             SDL_ReleaseGPUShader(gpu_device, fragment_shader);
         }
 
-        if (vertex_buffer) {
-            SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
+        if (cube_mesh.vertex_buffer) {
+            SDL_ReleaseGPUBuffer(gpu_device, cube_mesh.vertex_buffer);
         }
 
-        if (index_buffer) {
-            SDL_ReleaseGPUBuffer(gpu_device, index_buffer);
+        if (cube_mesh.index_buffer) {
+            SDL_ReleaseGPUBuffer(gpu_device, cube_mesh.index_buffer);
         }
 
         if (depth_texture) {
@@ -799,7 +809,7 @@ bool render(
         );
 
         SDL_GPUBufferBinding vertex_binding = {0};
-        vertex_binding.buffer = vertex_buffer;
+        vertex_binding.buffer = cube_mesh.vertex_buffer;
         vertex_binding.offset = 0;
 
         SDL_BindGPUVertexBuffers(
@@ -810,7 +820,7 @@ bool render(
         );
 
         SDL_GPUBufferBinding index_binding = {0};
-        index_binding.buffer = index_buffer;
+        index_binding.buffer = cube_mesh.index_buffer;
         index_binding.offset = 0;
 
         SDL_BindGPUIndexBuffer(
@@ -891,9 +901,9 @@ bool render(
             mat4_translation(1.5f, 0.0f, 1.0f)
         };
         
-        size_t model_count = sizeof(models) / sizeof(models[0]);
+        const size_t model_count = sizeof(models) / sizeof(models[0]);
         for (size_t i = 0; i < model_count; ++i) {
-            Mat4 view_model = mat4_multiply(view,models[i]);
+            Mat4 view_model = mat4_multiply(view, models[i]);
 
             VertexUniforms uniforms = {
                 .transform = mat4_multiply(projection, view_model),
@@ -909,7 +919,7 @@ bool render(
 
             SDL_DrawGPUIndexedPrimitives(
                 render_pass,
-                (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0])),
+                cube_mesh.index_count,
                 1,
                 0,
                 0,
