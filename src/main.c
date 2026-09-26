@@ -223,6 +223,239 @@ static bool ensure_depth_texture(
     return true;
 }
 
+static void destroy_mesh(Mesh *mesh) {
+    if (!mesh) {
+        return;
+    }
+
+    if (gpu_device) {
+        if (mesh->vertex_buffer) {
+            SDL_ReleaseGPUBuffer(
+                gpu_device,
+                mesh->vertex_buffer
+            );
+        }
+
+        if (mesh->index_buffer) {
+            SDL_ReleaseGPUBuffer(
+                gpu_device,
+                mesh->index_buffer
+            );
+        }
+    }
+
+    *mesh = (Mesh){0};
+}
+
+static bool create_mesh(
+    Mesh *mesh,
+    const Vertex *vertices,
+    Uint32 vertex_count,
+    const Uint16 *indices,
+    Uint32 index_count
+) {
+    if (!mesh ||
+        !vertices ||
+        vertex_count == 0 ||
+        !indices ||
+        index_count == 0) {
+        SDL_Log("Cannot create a mesh from empty data");
+        return false;
+    }
+
+    destroy_mesh(mesh);
+
+    const Uint32 vertex_data_size = vertex_count * (Uint32)sizeof(Vertex);
+    const Uint32 index_data_size = index_count * (Uint32)sizeof(Uint16);
+    const Uint32 index_data_offset = (vertex_data_size +3u) & ~3u;
+
+    SDL_GPUBufferCreateInfo vertex_buffer_info = {
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+        .size = vertex_data_size
+    };
+
+    mesh->vertex_buffer = SDL_CreateGPUBuffer(
+        gpu_device,
+        &vertex_buffer_info
+    );
+
+    if(!mesh->vertex_buffer) {
+        SDL_Log(
+            "Could not create vertex buffer: %s",
+            SDL_GetError()
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_GPUBufferCreateInfo index_buffer_info = {
+        .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+        .size = index_data_size
+    };
+
+    mesh->index_buffer = SDL_CreateGPUBuffer(
+        gpu_device,
+        &index_buffer_info
+    );
+
+    if (!mesh->index_buffer) {
+        SDL_Log(
+            "Could not create index buffer: %s",
+            SDL_GetError()
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo transfer_info = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = index_data_offset + index_data_size
+    };
+
+    SDL_GPUTransferBuffer *transfer_buffer =
+        SDL_CreateGPUTransferBuffer(
+            gpu_device,
+            &transfer_info
+        );
+
+    if (!transfer_buffer) {
+        SDL_Log(
+            "Could not create mesh transfer buffer: %s",
+            SDL_GetError()
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    void *mapped_data = SDL_MapGPUTransferBuffer(
+        gpu_device,
+        transfer_buffer,
+        false
+    );
+
+    if (!mapped_data) {
+        SDL_Log(
+            "Could not map mesh transfer buffer: %s",
+            SDL_GetError()
+        );
+        SDL_ReleaseGPUTransferBuffer(
+            gpu_device,
+            transfer_buffer
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_memcpy(
+        mapped_data,
+        vertices,
+        vertex_data_size
+    );
+
+    SDL_memcpy(
+        (Uint8 *)mapped_data + index_data_offset,
+        indices,
+        index_data_size
+    );
+
+    SDL_UnmapGPUTransferBuffer(
+        gpu_device,
+        transfer_buffer
+    );
+
+    SDL_GPUCommandBuffer *command_buffer =
+        SDL_AcquireGPUCommandBuffer(gpu_device);
+
+    if (!command_buffer) {
+        SDL_Log(
+            "Could not acquire mesh upload command buffer: %s",
+            SDL_GetError()
+        );
+        SDL_ReleaseGPUTransferBuffer(
+            gpu_device,
+            transfer_buffer
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_GPUCopyPass *copy_pass =
+        SDL_BeginGPUCopyPass(command_buffer);
+
+    if (!copy_pass) {
+        SDL_Log(
+            "Could not begin mesh copy pass: %s",
+            SDL_GetError()
+        );
+        SDL_CancelGPUCommandBuffer(command_buffer);
+        SDL_ReleaseGPUTransferBuffer(
+            gpu_device,
+            transfer_buffer
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_GPUTransferBufferLocation vertex_source = {
+        .transfer_buffer = transfer_buffer,
+        .offset = 0
+    };
+
+    SDL_GPUBufferRegion vertex_destination = {
+        .buffer = mesh->vertex_buffer,
+        .offset = 0,
+        .size = vertex_data_size
+    };
+
+    SDL_UploadToGPUBuffer(
+        copy_pass,
+        &vertex_source,
+        &vertex_destination,
+        false
+    );
+
+    SDL_GPUTransferBufferLocation index_source = {
+        .transfer_buffer = transfer_buffer,
+        .offset = index_data_offset
+    };
+
+    SDL_GPUBufferRegion index_destination = {
+        .buffer = mesh->index_buffer,
+        .offset = 0,
+        .size = index_data_size
+    };
+
+    SDL_UploadToGPUBuffer(
+        copy_pass,
+        &index_source,
+        &index_destination,
+        false
+    );
+
+    SDL_EndGPUCopyPass(copy_pass);
+
+    if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+        SDL_Log(
+            "Could not submit mesh upload: %s",
+            SDL_GetError()
+        );
+        SDL_ReleaseGPUTransferBuffer(
+            gpu_device,
+            transfer_buffer
+        );
+        destroy_mesh(mesh);
+        return false;
+    }
+
+    SDL_ReleaseGPUTransferBuffer(
+        gpu_device,
+        transfer_buffer
+    );
+
+    mesh->index_count = index_count;
+    return true;
+}
+
 // -------------------- Init / Shutdown --------------------
 void shutdown(void);
 
@@ -311,44 +544,30 @@ bool init(void) {
         return false;
     }
 
-    const Uint32 vertex_data_size = (Uint32)sizeof(cube_vertices);
-    const Uint32 index_data_size = (Uint32)sizeof(cube_indices);
-    cube_mesh.index_count =
+    const Uint32 cube_vertex_count =
+        (Uint32)(sizeof(cube_vertices) / sizeof(cube_vertices[0]));
+
+    const Uint32 cube_index_count =
         (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0]));
+
+    if (!create_mesh(
+            &cube_mesh,
+            cube_vertices,
+            cube_vertex_count,
+            cube_indices,
+            cube_index_count)) {
+        shutdown();
+        return false;
+    }
+
     const Uint32 checker_data_size =
         checker_texture_width *
         checker_texture_height *
         checker_bytes_per_pixel;
-    const Uint32 checker_data_offset =
-        (vertex_data_size + index_data_size + 3u) & ~3u; // round up to four-byte
-
-    SDL_GPUBufferCreateInfo vertex_buffer_info = {0};
-    vertex_buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    vertex_buffer_info.size = vertex_data_size;
-
-    cube_mesh.vertex_buffer =
-        SDL_CreateGPUBuffer(gpu_device, &vertex_buffer_info);
-    if (!cube_mesh.vertex_buffer) {
-        SDL_Log("Could not create vertex buffer: %s", SDL_GetError());
-        shutdown();
-        return false;
-    }
-
-    SDL_GPUBufferCreateInfo index_info = {0};
-    index_info.usage = SDL_GPU_BUFFERUSAGE_INDEX;
-    index_info.size = index_data_size;
-
-    cube_mesh.index_buffer =
-        SDL_CreateGPUBuffer(gpu_device, &index_info);
-    if (!cube_mesh.index_buffer) {
-        SDL_Log("Could not create index buffer: %s", SDL_GetError());
-        shutdown();
-        return false;
-    }
 
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transfer_info.size = checker_data_offset + checker_data_size;
+    transfer_info.size = checker_data_size;
 
     SDL_GPUTransferBuffer *transfer_buffer = SDL_CreateGPUTransferBuffer(
         gpu_device,
@@ -374,19 +593,7 @@ bool init(void) {
         return false;
     }
 
-    SDL_memcpy(
-        mapped_data,
-        cube_vertices,
-        vertex_data_size
-    );
-
-    SDL_memcpy(
-        (Uint8 *)mapped_data + vertex_data_size,
-        cube_indices,
-        index_data_size
-    );
-
-    Uint8 *checker_pixels = (Uint8 *)mapped_data + checker_data_offset;
+    Uint8 *checker_pixels = mapped_data;
 
     for (Uint32 y = 0; y < checker_texture_height; ++y) {
         for (Uint32 x = 0; x < checker_texture_width; ++x) {
@@ -422,42 +629,10 @@ bool init(void) {
     SDL_GPUCopyPass *copy_pass =
         SDL_BeginGPUCopyPass(upload_commands);
 
-    SDL_GPUTransferBufferLocation source = {0};
-    source.transfer_buffer = transfer_buffer;
-    source.offset = 0;
-
-    SDL_GPUBufferRegion destination = {0};
-    destination.buffer = cube_mesh.vertex_buffer;
-    destination.offset = 0;
-    destination.size = vertex_data_size;
-
-    SDL_UploadToGPUBuffer(
-        copy_pass,
-        &source,
-        &destination,
-        false
-    );
-
-    SDL_GPUTransferBufferLocation index_source = {0};
-    index_source.transfer_buffer = transfer_buffer;
-    index_source.offset = vertex_data_size;
-
-    SDL_GPUBufferRegion index_destination = {0};
-    index_destination.buffer = cube_mesh.index_buffer;
-    index_destination.offset = 0;
-    index_destination.size = index_data_size;
-
-    SDL_UploadToGPUBuffer(
-        copy_pass,
-        &index_source,
-        &index_destination,
-        false
-    );
-
     SDL_GPUTextureTransferInfo checker_source = {0};
 
     checker_source.transfer_buffer = transfer_buffer;
-    checker_source.offset = checker_data_offset;
+    checker_source.offset = 0;
     checker_source.pixels_per_row = checker_texture_width;
     checker_source.rows_per_layer = checker_texture_height;
 
@@ -491,7 +666,7 @@ bool init(void) {
 
     SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 
-    SDL_Log("Uploaded mesh and checker texture");
+    SDL_Log("Created cube mesh and uploaded checker texture");
 
     size_t vertex_shader_size = 0;
     Uint8 *vertex_shader_code = SDL_LoadFile(
@@ -670,13 +845,7 @@ void shutdown(void) {
             SDL_ReleaseGPUShader(gpu_device, fragment_shader);
         }
 
-        if (cube_mesh.vertex_buffer) {
-            SDL_ReleaseGPUBuffer(gpu_device, cube_mesh.vertex_buffer);
-        }
-
-        if (cube_mesh.index_buffer) {
-            SDL_ReleaseGPUBuffer(gpu_device, cube_mesh.index_buffer);
-        }
+        destroy_mesh(&cube_mesh);
 
         if (depth_texture) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);
