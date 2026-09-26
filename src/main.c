@@ -1211,10 +1211,12 @@ void run(void) {
     };
 
     const float two_pi = 6.28318530718f;
-    const float camera_speed = 1.5f;
+    const float camera_speed = 3.0f;
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
+    float fps_elapsed = 0.0f;
+    Uint32 fps_frame_count = 0;
 
     while (!quit) {
         Uint64 now = SDL_GetPerformanceCounter();
@@ -1296,6 +1298,26 @@ void run(void) {
 
         if (!render(angle_x, angle_y, camera, show_texture)) {
             quit = true;
+        } else {
+            fps_elapsed += dt;
+            ++fps_frame_count;
+
+            if (fps_elapsed >= 1.0f) {
+                float average_fps =
+                    (float)fps_frame_count / fps_elapsed;
+
+                char window_title[64];
+                SDL_snprintf(
+                    window_title,
+                    sizeof(window_title),
+                    "3D Engine | FPS: %.1f",
+                    average_fps
+                );
+                SDL_SetWindowTitle(window, window_title);
+
+                fps_elapsed = 0.0f;
+                fps_frame_count = 0;
+            }
         }
     }
 }
