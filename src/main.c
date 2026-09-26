@@ -1017,10 +1017,10 @@ static void draw_render_object(
 
 // -------------------- Render --------------------
 bool render(
-    float angle_x,
-    float angle_y,
     Camera camera,
-    bool show_texture
+    bool show_texture,
+    const RenderObject *objects,
+    size_t object_count
 ) {
     SDL_GPUCommandBuffer *command_buffer = 
         SDL_AcquireGPUCommandBuffer(gpu_device);
@@ -1125,10 +1125,6 @@ bool render(
         float vertical_fov =
             60.0f * (3.14159265359f / 180.0f); // radians
 
-        Mat4 rotation_x = mat4_rotation_x(angle_x);
-        Mat4 rotation_y = mat4_rotation_y(angle_y);
-        Mat4 rotating_model = mat4_multiply(rotation_y, rotation_x);
-
         Vec3 camera_forward = camera_forward_direction(camera);
 
         Vec3 camera_target = vec3_add(
@@ -1154,24 +1150,6 @@ bool render(
             0.1f,
             100.0f
         );
-
-        RenderObject objects[] = {
-            {
-                .mesh  = &cube_mesh,
-                .model = rotating_model
-            },
-            {
-                .mesh  = &cube_mesh,
-                .model = mat4_translation(1.5f, 0.0f, 1.0f)
-            },
-            {
-                .mesh  = &floor_mesh,
-                .model = mat4_translation(0.0f, -1.0f, 0.0f)
-            }
-        };
-
-        const size_t object_count =
-            sizeof(objects) / sizeof(objects[0]);
 
         for (size_t i = 0; i < object_count; ++i) {
             draw_render_object(
@@ -1210,8 +1188,26 @@ void run(void) {
         .pitch = 0.0f
     };
 
+    RenderObject objects[] = {
+        {
+            .mesh = &cube_mesh,
+            .model = mat4_identity()
+        },
+        {
+            .mesh = &cube_mesh,
+            .model = mat4_translation(1.5f, 0.0f, 1.0f)
+        },
+        {
+            .mesh = &floor_mesh,
+            .model = mat4_translation(0.0f, -1.0f, 0.0f)
+        }
+    };
+
+    const size_t object_count =
+        sizeof(objects) / sizeof(objects[0]);
+
     const float two_pi = 6.28318530718f;
-    const float camera_speed = 3.0f;
+    const float camera_speed = 4.0f;
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
@@ -1296,7 +1292,15 @@ void run(void) {
             angle_y -= two_pi;
         }
 
-        if (!render(angle_x, angle_y, camera, show_texture)) {
+        Mat4 rotation_x = mat4_rotation_x(angle_x);
+        Mat4 rotation_y = mat4_rotation_y(angle_y);
+        objects[0].model = mat4_multiply(rotation_y, rotation_x);
+
+        if (!render(
+                camera,
+                show_texture,
+                objects,
+                object_count)) {
             quit = true;
         } else {
             fps_elapsed += dt;
