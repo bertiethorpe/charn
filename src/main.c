@@ -47,6 +47,7 @@ typedef struct {
 } Mesh;
 
 static Mesh cube_mesh = {0};
+static Mesh floor_mesh = {0};
 
 typedef struct {
     Mesh *mesh;
@@ -174,6 +175,34 @@ static const Vertex cube_vertices[] = {
     { .position = { 0.5f, -0.5f,  0.5f},
       .normal   = { 0.0f, -1.0f,  0.0f},
       .uv       = { 1.0f,  1.0f} }  // 23
+};
+
+static const Uint16 floor_indices[] = {
+    0, 1, 2,
+    0, 2, 3
+};
+
+static const Vertex floor_vertices[] = {
+    {
+        .position = {-5.0f,  0.0f, -5.0f},
+        .normal   = { 0.0f,  1.0f,  0.0f},
+        .uv       = { 0.0f,  5.0f}
+    },
+    {
+        .position = {-5.0f,  0.0f,  5.0f},
+        .normal   = { 0.0f,  1.0f,  0.0f},
+        .uv       = { 0.0f,  5.0f}
+    },
+    {
+        .position = { 5.0f,  0.0f,  5.0f},
+        .normal   = { 0.0f,  1.0f,  0.0f},
+        .uv       = { 0.0f,  5.0f}
+    },
+    {
+        .position = { 5.0f,  0.0f, -5.0f},
+        .normal   = { 0.0f,  1.0f,  0.0f},
+        .uv       = { 0.0f,  5.0f}
+    }
 };
 
 static bool ensure_depth_texture(
@@ -560,6 +589,22 @@ bool init(void) {
         return false;
     }
 
+    const Uint32 floor_vertex_count =
+        (Uint32)(sizeof(floor_vertices) / sizeof(floor_vertices[0]));
+
+    const Uint32 floor_index_count =
+        (Uint32)(sizeof(floor_indices) / sizeof(floor_indices[0]));
+
+    if (!create_mesh(
+            &floor_mesh,
+            floor_vertices,
+            floor_vertex_count,
+            floor_indices,
+            floor_index_count)) {
+        shutdown();
+        return false;
+    }
+
     const Uint32 checker_data_size =
         checker_texture_width *
         checker_texture_height *
@@ -846,6 +891,7 @@ void shutdown(void) {
         }
 
         destroy_mesh(&cube_mesh);
+        destroy_mesh(&floor_mesh);
 
         if (depth_texture) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);
@@ -1111,12 +1157,16 @@ bool render(
 
         RenderObject objects[] = {
             {
-                .mesh = &cube_mesh,
+                .mesh  = &cube_mesh,
                 .model = rotating_model
             },
             {
-                .mesh = &cube_mesh,
+                .mesh  = &cube_mesh,
                 .model = mat4_translation(1.5f, 0.0f, 1.0f)
+            },
+            {
+                .mesh  = &floor_mesh,
+                .model = mat4_translation(0.0f, -1.0f, 0.0f)
             }
         };
 
