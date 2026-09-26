@@ -7,6 +7,7 @@
 #include <SDL3/SDL_main.h>
 
 #include "math3d.h"
+#include "mesh.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -34,18 +35,6 @@ static Uint32 depth_texture_width = 0;
 static Uint32 depth_texture_height = 0;
 
 // ------------------------- Data --------------------------
-typedef struct {
-    float position[3];
-    float normal[3];
-    float uv[2];
-} Vertex;
-
-typedef struct {
-    SDL_GPUBuffer *vertex_buffer;
-    SDL_GPUBuffer *index_buffer;
-    Uint32 index_count;
-} Mesh;
-
 static Mesh cube_mesh = {0};
 static Mesh floor_mesh = {0};
 
@@ -273,30 +262,6 @@ static bool ensure_depth_texture(
     return true;
 }
 
-static void destroy_mesh(Mesh *mesh) {
-    if (!mesh) {
-        return;
-    }
-
-    if (gpu_device) {
-        if (mesh->vertex_buffer) {
-            SDL_ReleaseGPUBuffer(
-                gpu_device,
-                mesh->vertex_buffer
-            );
-        }
-
-        if (mesh->index_buffer) {
-            SDL_ReleaseGPUBuffer(
-                gpu_device,
-                mesh->index_buffer
-            );
-        }
-    }
-
-    *mesh = (Mesh){0};
-}
-
 static void destroy_texture(Texture *texture) {
     if (!texture) {
         return;
@@ -319,215 +284,6 @@ static void destroy_texture(Texture *texture) {
     }
 
     *texture = (Texture){0};
-}
-
-static bool create_mesh(
-    Mesh *mesh,
-    const Vertex *vertices,
-    Uint32 vertex_count,
-    const Uint16 *indices,
-    Uint32 index_count
-) {
-    if (!mesh ||
-        !vertices ||
-        vertex_count == 0 ||
-        !indices ||
-        index_count == 0) {
-        SDL_Log("Cannot create a mesh from empty data");
-        return false;
-    }
-
-    destroy_mesh(mesh);
-
-    const Uint32 vertex_data_size = vertex_count * (Uint32)sizeof(Vertex);
-    const Uint32 index_data_size = index_count * (Uint32)sizeof(Uint16);
-    const Uint32 index_data_offset = (vertex_data_size +3u) & ~3u;
-
-    SDL_GPUBufferCreateInfo vertex_buffer_info = {
-        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-        .size = vertex_data_size
-    };
-
-    mesh->vertex_buffer = SDL_CreateGPUBuffer(
-        gpu_device,
-        &vertex_buffer_info
-    );
-
-    if(!mesh->vertex_buffer) {
-        SDL_Log(
-            "Could not create vertex buffer: %s",
-            SDL_GetError()
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_GPUBufferCreateInfo index_buffer_info = {
-        .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-        .size = index_data_size
-    };
-
-    mesh->index_buffer = SDL_CreateGPUBuffer(
-        gpu_device,
-        &index_buffer_info
-    );
-
-    if (!mesh->index_buffer) {
-        SDL_Log(
-            "Could not create index buffer: %s",
-            SDL_GetError()
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_GPUTransferBufferCreateInfo transfer_info = {
-        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = index_data_offset + index_data_size
-    };
-
-    SDL_GPUTransferBuffer *transfer_buffer =
-        SDL_CreateGPUTransferBuffer(
-            gpu_device,
-            &transfer_info
-        );
-
-    if (!transfer_buffer) {
-        SDL_Log(
-            "Could not create mesh transfer buffer: %s",
-            SDL_GetError()
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    void *mapped_data = SDL_MapGPUTransferBuffer(
-        gpu_device,
-        transfer_buffer,
-        false
-    );
-
-    if (!mapped_data) {
-        SDL_Log(
-            "Could not map mesh transfer buffer: %s",
-            SDL_GetError()
-        );
-        SDL_ReleaseGPUTransferBuffer(
-            gpu_device,
-            transfer_buffer
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_memcpy(
-        mapped_data,
-        vertices,
-        vertex_data_size
-    );
-
-    SDL_memcpy(
-        (Uint8 *)mapped_data + index_data_offset,
-        indices,
-        index_data_size
-    );
-
-    SDL_UnmapGPUTransferBuffer(
-        gpu_device,
-        transfer_buffer
-    );
-
-    SDL_GPUCommandBuffer *command_buffer =
-        SDL_AcquireGPUCommandBuffer(gpu_device);
-
-    if (!command_buffer) {
-        SDL_Log(
-            "Could not acquire mesh upload command buffer: %s",
-            SDL_GetError()
-        );
-        SDL_ReleaseGPUTransferBuffer(
-            gpu_device,
-            transfer_buffer
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_GPUCopyPass *copy_pass =
-        SDL_BeginGPUCopyPass(command_buffer);
-
-    if (!copy_pass) {
-        SDL_Log(
-            "Could not begin mesh copy pass: %s",
-            SDL_GetError()
-        );
-        SDL_CancelGPUCommandBuffer(command_buffer);
-        SDL_ReleaseGPUTransferBuffer(
-            gpu_device,
-            transfer_buffer
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_GPUTransferBufferLocation vertex_source = {
-        .transfer_buffer = transfer_buffer,
-        .offset = 0
-    };
-
-    SDL_GPUBufferRegion vertex_destination = {
-        .buffer = mesh->vertex_buffer,
-        .offset = 0,
-        .size = vertex_data_size
-    };
-
-    SDL_UploadToGPUBuffer(
-        copy_pass,
-        &vertex_source,
-        &vertex_destination,
-        false
-    );
-
-    SDL_GPUTransferBufferLocation index_source = {
-        .transfer_buffer = transfer_buffer,
-        .offset = index_data_offset
-    };
-
-    SDL_GPUBufferRegion index_destination = {
-        .buffer = mesh->index_buffer,
-        .offset = 0,
-        .size = index_data_size
-    };
-
-    SDL_UploadToGPUBuffer(
-        copy_pass,
-        &index_source,
-        &index_destination,
-        false
-    );
-
-    SDL_EndGPUCopyPass(copy_pass);
-
-    if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
-        SDL_Log(
-            "Could not submit mesh upload: %s",
-            SDL_GetError()
-        );
-        SDL_ReleaseGPUTransferBuffer(
-            gpu_device,
-            transfer_buffer
-        );
-        destroy_mesh(mesh);
-        return false;
-    }
-
-    SDL_ReleaseGPUTransferBuffer(
-        gpu_device,
-        transfer_buffer
-    );
-
-    mesh->index_count = index_count;
-    return true;
 }
 
 // -------------------- Init / Shutdown --------------------
@@ -624,7 +380,8 @@ bool init(void) {
     const Uint32 cube_index_count =
         (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0]));
 
-    if (!create_mesh(
+    if (!mesh_create(
+            gpu_device,
             &cube_mesh,
             cube_vertices,
             cube_vertex_count,
@@ -640,7 +397,8 @@ bool init(void) {
     const Uint32 floor_index_count =
         (Uint32)(sizeof(floor_indices) / sizeof(floor_indices[0]));
 
-    if (!create_mesh(
+    if (!mesh_create(
+            gpu_device,
             &floor_mesh,
             floor_vertices,
             floor_vertex_count,
@@ -1007,8 +765,8 @@ void shutdown(void) {
             SDL_ReleaseGPUShader(gpu_device, wireframe_fragment_shader);
         }
 
-        destroy_mesh(&cube_mesh);
-        destroy_mesh(&floor_mesh);
+        mesh_destroy(gpu_device, &cube_mesh);
+        mesh_destroy(gpu_device, &floor_mesh);
 
         if (depth_texture) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);

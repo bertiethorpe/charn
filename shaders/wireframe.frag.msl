@@ -1,0 +1,14 @@
+#include <metal_stdlib>
+using namespace metal;
+
+struct VertexInput {
+    float4 position [[position]];
+    float3 world_position;
+    float3 normal;
+    float2 uv;
+};
+
+fragment float4 fragment_main(VertexInput input [[stage_in]])
+{
+    return float4(1.0, 1.0, 1.0, 1.0);
+}
