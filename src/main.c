@@ -16,10 +16,10 @@ static SDL_GPUDevice *gpu_device = NULL;
 
 static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
+static SDL_GPUShader *wireframe_fragment_shader = NULL;
 static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
+static SDL_GPUGraphicsPipeline *wireframe_pipeline = NULL;
 
-static SDL_GPUTexture *checker_texture = NULL;
-static SDL_GPUSampler *texture_sampler = NULL;
 static const Uint32 checker_texture_width = 16;
 static const Uint32 checker_texture_height = 16;
 static const Uint32 checker_square_size = 4;
@@ -50,7 +50,28 @@ static Mesh cube_mesh = {0};
 static Mesh floor_mesh = {0};
 
 typedef struct {
+    SDL_GPUTexture *texture;
+    SDL_GPUSampler *sampler;
+} Texture;
+
+typedef struct {
+    Texture *texture;
+    float tint[4];
+} Material;
+
+static Texture checker_texture = {0};
+static Material cube_material = {
+    .texture = &checker_texture,
+    .tint    = {1.0f, 1.0f, 1.0f, 1.0f}
+};
+static Material floor_material = {
+    .texture = &checker_texture,
+    .tint    = {1.0f, 0.70f, 0.65f, 1.0f}
+};
+
+typedef struct {
     Mesh *mesh;
+    Material *material;
     Mat4 model;
 } RenderObject;
 
@@ -186,7 +207,7 @@ static const Vertex floor_vertices[] = {
     {
         .position = {-5.0f,  0.0f, -5.0f},
         .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 0.0f,  5.0f}
+        .uv       = { 0.0f,  0.0f}
     },
     {
         .position = {-5.0f,  0.0f,  5.0f},
@@ -196,12 +217,12 @@ static const Vertex floor_vertices[] = {
     {
         .position = { 5.0f,  0.0f,  5.0f},
         .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 0.0f,  5.0f}
+        .uv       = { 5.0f,  5.0f}
     },
     {
         .position = { 5.0f,  0.0f, -5.0f},
         .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 0.0f,  5.0f}
+        .uv       = { 5.0f,  0.0f}
     }
 };
 
@@ -274,6 +295,30 @@ static void destroy_mesh(Mesh *mesh) {
     }
 
     *mesh = (Mesh){0};
+}
+
+static void destroy_texture(Texture *texture) {
+    if (!texture) {
+        return;
+    }
+
+    if (gpu_device) {
+        if (texture->sampler) {
+            SDL_ReleaseGPUSampler(
+                gpu_device,
+                texture->sampler
+            );
+        }
+
+        if (texture->texture) {
+            SDL_ReleaseGPUTexture(
+                gpu_device,
+                texture->texture
+            );
+        }
+    }
+
+    *texture = (Texture){0};
 }
 
 static bool create_mesh(
@@ -536,12 +581,12 @@ bool init(void) {
     checker_texture_info.num_levels = 1;
     checker_texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
-    checker_texture = SDL_CreateGPUTexture(
+    checker_texture.texture = SDL_CreateGPUTexture(
         gpu_device,
         &checker_texture_info
     );
 
-    if (!checker_texture) {
+    if (!checker_texture.texture) {
         SDL_Log(
             "Could not create checker texture: %s",
             SDL_GetError()
@@ -559,12 +604,12 @@ bool init(void) {
     sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
     sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
 
-    texture_sampler = SDL_CreateGPUSampler(
+    checker_texture.sampler = SDL_CreateGPUSampler(
         gpu_device,
         &sampler_info
     );
 
-    if (!texture_sampler) {
+    if (!checker_texture.sampler) {
         SDL_Log(
             "Could not create texture sampler: %s",
             SDL_GetError()
@@ -683,7 +728,7 @@ bool init(void) {
 
     SDL_GPUTextureRegion checker_destination = {0};
 
-    checker_destination.texture = checker_texture;
+    checker_destination.texture = checker_texture.texture;
     checker_destination.mip_level = 0;
     checker_destination.layer = 0;
     checker_destination.x = 0;
@@ -738,8 +783,26 @@ bool init(void) {
         return false;
     }
 
+    size_t wireframe_fragment_shader_size = 0;
+    Uint8 *wireframe_fragment_shader_code = SDL_LoadFile(
+        "shaders/wireframe.frag.msl",
+        &wireframe_fragment_shader_size
+    );
+
+    if (!wireframe_fragment_shader_code) {
+        SDL_Log("Could not load wireframe fragment shader: %s", SDL_GetError());
+        SDL_free(vertex_shader_code);
+        SDL_free(fragment_shader_code);
+        shutdown();
+        return false;
+    }
+
     SDL_Log("Loaded vertex shader: %zu bytes", vertex_shader_size);
     SDL_Log("Loaded fragment shader: %zu bytes", fragment_shader_size);
+    SDL_Log(
+        "Loaded wireframe fragment shader: %zu bytes",
+        wireframe_fragment_shader_size
+    );
 
     SDL_GPUShaderCreateInfo vertex_shader_info = {0};
     vertex_shader_info.code = vertex_shader_code;
@@ -758,6 +821,7 @@ bool init(void) {
         SDL_Log("Could not create vertex shader: %s", SDL_GetError());
         SDL_free(vertex_shader_code);
         SDL_free(fragment_shader_code);
+        SDL_free(wireframe_fragment_shader_code);
         shutdown();
         return false;
     }
@@ -770,7 +834,7 @@ bool init(void) {
     fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
     fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
     fragment_shader_info.num_samplers = 1;
-    fragment_shader_info.num_uniform_buffers = 1;
+    fragment_shader_info.num_uniform_buffers = 2;
 
     fragment_shader = SDL_CreateGPUShader(
         gpu_device,
@@ -781,14 +845,40 @@ bool init(void) {
         SDL_Log("Could not create fragment shader: %s", SDL_GetError());
         SDL_free(vertex_shader_code);
         SDL_free(fragment_shader_code);
+        SDL_free(wireframe_fragment_shader_code);
         shutdown();
         return false;
     }
 
-    SDL_Log("Created both GPU shaders");
+    SDL_GPUShaderCreateInfo wireframe_fragment_shader_info = {0};
+    wireframe_fragment_shader_info.code = wireframe_fragment_shader_code;
+    wireframe_fragment_shader_info.code_size = wireframe_fragment_shader_size;
+    wireframe_fragment_shader_info.entrypoint = "fragment_main";
+    wireframe_fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
+    wireframe_fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+
+    wireframe_fragment_shader = SDL_CreateGPUShader(
+        gpu_device,
+        &wireframe_fragment_shader_info
+    );
+
+    if (!wireframe_fragment_shader) {
+        SDL_Log(
+            "Could not create wireframe fragment shader: %s",
+            SDL_GetError()
+        );
+        SDL_free(vertex_shader_code);
+        SDL_free(fragment_shader_code);
+        SDL_free(wireframe_fragment_shader_code);
+        shutdown();
+        return false;
+    }
+
+    SDL_Log("Created all GPU shaders");
 
     SDL_free(vertex_shader_code);
     SDL_free(fragment_shader_code);
+    SDL_free(wireframe_fragment_shader_code);
 
     SDL_GPUColorTargetDescription color_target_description = {0};
     color_target_description.format =
@@ -851,13 +941,29 @@ bool init(void) {
         return false;
     }
 
-    SDL_Log("Created graphics pipeline");
+    pipeline_info.fragment_shader = wireframe_fragment_shader;
+    pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
+
+    wireframe_pipeline = SDL_CreateGPUGraphicsPipeline(
+        gpu_device,
+        &pipeline_info
+    );
+
+    if (!wireframe_pipeline) {
+        SDL_Log("Could not create wireframe pipeline: %s", SDL_GetError());
+        shutdown();
+        return false;
+    }
+
+    SDL_Log("Created fill and wireframe graphics pipelines");
     
     SDL_ReleaseGPUShader(gpu_device, vertex_shader);
     SDL_ReleaseGPUShader(gpu_device, fragment_shader);
+    SDL_ReleaseGPUShader(gpu_device, wireframe_fragment_shader);
 
     vertex_shader = NULL;
     fragment_shader = NULL;
+    wireframe_fragment_shader = NULL;
 
     SDL_SetWindowPosition(window, 50, 100);
 
@@ -882,12 +988,23 @@ void shutdown(void) {
             );
         }
 
+        if (wireframe_pipeline) {
+            SDL_ReleaseGPUGraphicsPipeline(
+                gpu_device,
+                wireframe_pipeline
+            );
+        }
+
         if (vertex_shader) {
             SDL_ReleaseGPUShader(gpu_device, vertex_shader);
         }
 
         if (fragment_shader) {
             SDL_ReleaseGPUShader(gpu_device, fragment_shader);
+        }
+
+        if (wireframe_fragment_shader) {
+            SDL_ReleaseGPUShader(gpu_device, wireframe_fragment_shader);
         }
 
         destroy_mesh(&cube_mesh);
@@ -897,13 +1014,7 @@ void shutdown(void) {
             SDL_ReleaseGPUTexture(gpu_device, depth_texture);
         }
 
-        if (texture_sampler) {
-            SDL_ReleaseGPUSampler(gpu_device, texture_sampler);
-        }
-
-        if (checker_texture) {
-            SDL_ReleaseGPUTexture(gpu_device, checker_texture);
-        }
+        destroy_texture(&checker_texture);
     }
 
     if (gpu_device && window) {
@@ -916,7 +1027,12 @@ void shutdown(void) {
 }
 
 // -------------------- Input --------------------
-void process_input(bool *quit, Camera *camera, bool *show_texture) {
+void process_input(
+    bool *quit,
+    Camera *camera,
+    bool *show_texture,
+    bool *show_wireframe
+) {
     const float mouse_sensitivity = 0.0025f;
     const float maximum_pitch = 1.553343f;
 
@@ -935,6 +1051,12 @@ void process_input(bool *quit, Camera *camera, bool *show_texture) {
                 !event.key.repeat
             ) {
                 *show_texture = !*show_texture;
+            }
+            else if (
+                event.key.scancode == SDL_SCANCODE_F &&
+                !event.key.repeat
+            ) {
+                *show_wireframe = !*show_wireframe;
             }
         }
         else if (event.type == SDL_EVENT_MOUSE_MOTION) {
@@ -960,7 +1082,8 @@ static void draw_render_object(
     SDL_GPURenderPass *render_pass,
     const RenderObject *object,
     Mat4 view,
-    Mat4 projection
+    Mat4 projection,
+    bool show_wireframe
 ) {
     const Mesh *mesh = object->mesh;
 
@@ -987,6 +1110,23 @@ static void draw_render_object(
         SDL_GPU_INDEXELEMENTSIZE_16BIT
     );
 
+    if (!show_wireframe) {
+        const Material *material = object->material;
+        const Texture *texture = material->texture;
+
+        SDL_GPUTextureSamplerBinding material_binding = {
+            .texture = texture->texture,
+            .sampler = texture->sampler
+        };
+
+        SDL_BindGPUFragmentSamplers(
+            render_pass,
+            0,
+            &material_binding,
+            1
+        );
+    }
+
     Mat4 view_model = mat4_multiply(
         view,
         object->model
@@ -1004,6 +1144,17 @@ static void draw_render_object(
         sizeof(uniforms)
     );
 
+    if (!show_wireframe) {
+        const Material *material = object->material;
+
+        SDL_PushGPUFragmentUniformData(
+            command_buffer,
+            1,
+            material->tint,
+            sizeof(material->tint)
+        );
+    }
+
     SDL_DrawGPUIndexedPrimitives(
         render_pass,
         mesh->index_count,
@@ -1019,6 +1170,7 @@ static void draw_render_object(
 bool render(
     Camera camera,
     bool show_texture,
+    bool show_wireframe,
     const RenderObject *objects,
     size_t object_count
 ) {
@@ -1083,42 +1235,32 @@ bool render(
                 &depth_target
             );
 
-        SDL_BindGPUGraphicsPipeline(
-            render_pass,
-            graphics_pipeline
-        );
+        SDL_GPUGraphicsPipeline *active_pipeline =
+            show_wireframe ? wireframe_pipeline : graphics_pipeline;
 
-        SDL_GPUTextureSamplerBinding checker_binding = {0};
+        SDL_BindGPUGraphicsPipeline(render_pass, active_pipeline);
 
-        checker_binding.texture = checker_texture;
-        checker_binding.sampler = texture_sampler;
+        if (!show_wireframe) {
+            FragmentUniforms fragment_uniforms = {
+                .texture_mix = {
+                    show_texture ? 1.0f : 0.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f
+                },
+                .light_position = {-0.75f, 1.25f, -1.25f, 0.0f},
+                .ambient_strength = 0.15f,
+                .point_light_strength = 0.8f,
+                .falloff_distance = 3.0f
+            };
 
-        SDL_BindGPUFragmentSamplers(
-            render_pass,
-            0,
-            &checker_binding,
-            1
-        );
-
-        FragmentUniforms fragment_uniforms = {
-            .texture_mix = {
-                show_texture ? 1.0f : 0.0f,
-                0.0f,
-                0.0f,
-                0.0f
-            },
-            .light_position = {-0.75f, 1.25f, -1.25f, 0.0f},
-            .ambient_strength = 0.15f,
-            .point_light_strength = 0.8f,
-            .falloff_distance = 3.0f
-        };
-
-        SDL_PushGPUFragmentUniformData(
-            command_buffer,
-            0,
-            &fragment_uniforms,
-            sizeof(fragment_uniforms)
-        );
+            SDL_PushGPUFragmentUniformData(
+                command_buffer,
+                0,
+                &fragment_uniforms,
+                sizeof(fragment_uniforms)
+            );
+        }
 
         float aspect =
             (float)swapchain_width / (float)swapchain_height;
@@ -1157,7 +1299,8 @@ bool render(
                 render_pass,
                 &objects[i],
                 view,
-                projection
+                projection,
+                show_wireframe
             );
         }
 
@@ -1176,6 +1319,7 @@ bool render(
 void run(void) {
     bool quit = false;
     bool show_texture = true;
+    bool show_wireframe = false;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
     Camera camera = {
@@ -1190,16 +1334,19 @@ void run(void) {
 
     RenderObject objects[] = {
         {
-            .mesh = &cube_mesh,
-            .model = mat4_identity()
+            .mesh     = &cube_mesh,
+            .material = &cube_material,
+            .model    = mat4_identity()
         },
         {
-            .mesh = &cube_mesh,
-            .model = mat4_translation(1.5f, 0.0f, 1.0f)
+            .mesh     = &cube_mesh,
+            .material = &cube_material,
+            .model    = mat4_translation(1.5f, 0.0f, 1.0f)
         },
         {
-            .mesh = &floor_mesh,
-            .model = mat4_translation(0.0f, -1.0f, 0.0f)
+            .mesh     = &floor_mesh,
+            .material = &floor_material,
+            .model    = mat4_translation(0.0f, -1.0f, 0.0f)
         }
     };
 
@@ -1219,7 +1366,12 @@ void run(void) {
         float dt = (float)(now - last) / (float)frequency;
         last = now;
 
-        process_input(&quit, &camera, &show_texture);
+        process_input(
+            &quit,
+            &camera,
+            &show_texture,
+            &show_wireframe
+        );
 
         const bool *keyboard = SDL_GetKeyboardState(NULL);
 
@@ -1299,6 +1451,7 @@ void run(void) {
         if (!render(
                 camera,
                 show_texture,
+                show_wireframe,
                 objects,
                 object_count)) {
             quit = true;

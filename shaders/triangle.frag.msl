@@ -17,11 +17,16 @@ struct FragmentUniforms {
     float padding;
 };
 
+struct MaterialUniforms {
+    float4 tint;
+};
+
 fragment float4 fragment_main(
     VertexInput input [[stage_in]],
     texture2d<float> color_texture [[texture(0)]],
     sampler color_sampler [[sampler(0)]],
-    constant FragmentUniforms &uniforms [[buffer(0)]])
+    constant FragmentUniforms &uniforms [[buffer(0)]],
+    constant MaterialUniforms &material [[buffer(1)]])
 {
     float4 uv_color = float4(
         input.uv.x,
@@ -53,8 +58,8 @@ fragment float4 fragment_main(
         uniforms.point_light_strength * attenuation * diffuse_strength;
 
     float4 lit_texture_color = float4(
-        texture_color.rgb * light_intensity,
-        texture_color.a
+        texture_color.rgb * material.tint.rgb * light_intensity,
+        texture_color.a * material.tint.a
     );
 
     return mix(
