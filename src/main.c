@@ -8,6 +8,7 @@
 
 #include "math3d.h"
 #include "mesh.h"
+#include "shader.h"
 #include "texture.h"
 
 static const int width = 800;
@@ -370,127 +371,49 @@ bool init(void) {
 
     SDL_Log("Created cube mesh and uploaded checker texture");
 
-    size_t vertex_shader_size = 0;
-    Uint8 *vertex_shader_code = SDL_LoadFile(
-        "shaders/triangle.vert.msl",
-        &vertex_shader_size
-    );
-
-    if (!vertex_shader_code) {
-        SDL_Log("Could not load vertex shader: %s", SDL_GetError());
-        shutdown();
-        return false;
-    }
-
-    size_t fragment_shader_size = 0;
-    Uint8 *fragment_shader_code = SDL_LoadFile(
-        "shaders/triangle.frag.msl",
-        &fragment_shader_size
-    );
-
-    if (!fragment_shader_code) {
-        SDL_Log("Could not load fragment shader: %s", SDL_GetError());
-        SDL_free(vertex_shader_code);
-        shutdown();
-        return false;
-    }
-
-    size_t wireframe_fragment_shader_size = 0;
-    Uint8 *wireframe_fragment_shader_code = SDL_LoadFile(
-        "shaders/wireframe.frag.msl",
-        &wireframe_fragment_shader_size
-    );
-
-    if (!wireframe_fragment_shader_code) {
-        SDL_Log("Could not load wireframe fragment shader: %s", SDL_GetError());
-        SDL_free(vertex_shader_code);
-        SDL_free(fragment_shader_code);
-        shutdown();
-        return false;
-    }
-
-    SDL_Log("Loaded vertex shader: %zu bytes", vertex_shader_size);
-    SDL_Log("Loaded fragment shader: %zu bytes", fragment_shader_size);
-    SDL_Log(
-        "Loaded wireframe fragment shader: %zu bytes",
-        wireframe_fragment_shader_size
-    );
-
-    SDL_GPUShaderCreateInfo vertex_shader_info = {0};
-    vertex_shader_info.code = vertex_shader_code;
-    vertex_shader_info.code_size = vertex_shader_size;
-    vertex_shader_info.entrypoint = "vertex_main";
-    vertex_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
-    vertex_shader_info.stage = SDL_GPU_SHADERSTAGE_VERTEX;
-    vertex_shader_info.num_uniform_buffers = 1;
-
-    vertex_shader = SDL_CreateGPUShader(
+    vertex_shader = shader_load_msl(
         gpu_device,
-        &vertex_shader_info
+        "shaders/triangle.vert.msl",
+        "vertex_main",
+        SDL_GPU_SHADERSTAGE_VERTEX,
+        0, // fragment/vertex sampler
+        1 // uniform buffer
     );
 
     if (!vertex_shader) {
-        SDL_Log("Could not create vertex shader: %s", SDL_GetError());
-        SDL_free(vertex_shader_code);
-        SDL_free(fragment_shader_code);
-        SDL_free(wireframe_fragment_shader_code);
         shutdown();
         return false;
     }
 
-    SDL_GPUShaderCreateInfo fragment_shader_info = {0};
-
-    fragment_shader_info.code = fragment_shader_code;
-    fragment_shader_info.code_size = fragment_shader_size;
-    fragment_shader_info.entrypoint = "fragment_main";
-    fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
-    fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
-    fragment_shader_info.num_samplers = 1;
-    fragment_shader_info.num_uniform_buffers = 2;
-
-    fragment_shader = SDL_CreateGPUShader(
+    fragment_shader = shader_load_msl(
         gpu_device,
-        &fragment_shader_info
+        "shaders/triangle.frag.msl",
+        "fragment_main",
+        SDL_GPU_SHADERSTAGE_FRAGMENT,
+        1, // fragment/vertex sampler
+        2 // uniform buffer
     );
 
     if (!fragment_shader) {
-        SDL_Log("Could not create fragment shader: %s", SDL_GetError());
-        SDL_free(vertex_shader_code);
-        SDL_free(fragment_shader_code);
-        SDL_free(wireframe_fragment_shader_code);
         shutdown();
         return false;
     }
 
-    SDL_GPUShaderCreateInfo wireframe_fragment_shader_info = {0};
-    wireframe_fragment_shader_info.code = wireframe_fragment_shader_code;
-    wireframe_fragment_shader_info.code_size = wireframe_fragment_shader_size;
-    wireframe_fragment_shader_info.entrypoint = "fragment_main";
-    wireframe_fragment_shader_info.format = SDL_GPU_SHADERFORMAT_MSL;
-    wireframe_fragment_shader_info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
-
-    wireframe_fragment_shader = SDL_CreateGPUShader(
+    wireframe_fragment_shader = shader_load_msl(
         gpu_device,
-        &wireframe_fragment_shader_info
+        "shaders/wireframe.frag.msl",
+        "fragment_main",
+        SDL_GPU_SHADERSTAGE_FRAGMENT,
+        0,
+        0
     );
 
     if (!wireframe_fragment_shader) {
-        SDL_Log(
-            "Could not create wireframe fragment shader: %s",
-            SDL_GetError()
-        );
-        SDL_free(vertex_shader_code);
-        SDL_free(fragment_shader_code);
-        SDL_free(wireframe_fragment_shader_code);
         shutdown();
         return false;
     }
 
     SDL_Log("Created all GPU shaders");
-
-    SDL_free(vertex_shader_code);
-    SDL_free(fragment_shader_code);
-    SDL_free(wireframe_fragment_shader_code);
 
     SDL_GPUColorTargetDescription color_target_description = {0};
     color_target_description.format =
