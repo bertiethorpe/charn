@@ -8,6 +8,7 @@
 
 #include "math3d.h"
 #include "mesh.h"
+#include "pipeline.h"
 #include "shader.h"
 #include "texture.h"
 
@@ -415,77 +416,36 @@ bool init(void) {
 
     SDL_Log("Created all GPU shaders");
 
-    SDL_GPUColorTargetDescription color_target_description = {0};
-    color_target_description.format =
-        SDL_GetGPUSwapchainTextureFormat(gpu_device, window);
-
-    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {0};
-
-    SDL_GPUVertexBufferDescription vertex_buffer_description = {0};
-    vertex_buffer_description.slot = 0;
-    vertex_buffer_description.pitch = sizeof(Vertex);
-    vertex_buffer_description.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-
-    SDL_GPUVertexAttribute vertex_attributes[3] = {0};
-
-    vertex_attributes[0].location = 0;
-    vertex_attributes[0].buffer_slot = 0;
-    vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-    vertex_attributes[0].offset = (Uint32)offsetof(Vertex, position);
-
-    vertex_attributes[1].location = 1;
-    vertex_attributes[1].buffer_slot = 0;
-    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-    vertex_attributes[1].offset = (Uint32)offsetof(Vertex, normal);
-
-    vertex_attributes[2].location = 2;
-    vertex_attributes[2].buffer_slot = 0;
-    vertex_attributes[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-    vertex_attributes[2].offset = (Uint32)offsetof(Vertex, uv);
-
-    pipeline_info.vertex_shader = vertex_shader;
-    pipeline_info.fragment_shader = fragment_shader;
-    pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-    pipeline_info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
-    pipeline_info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;
-    pipeline_info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
-    pipeline_info.depth_stencil_state.enable_depth_test = true;
-    pipeline_info.depth_stencil_state.enable_depth_write = true;
-
-    pipeline_info.vertex_input_state.vertex_buffer_descriptions =
-        &vertex_buffer_description;
-    pipeline_info.vertex_input_state.num_vertex_buffers = 1;
-    pipeline_info.vertex_input_state.vertex_attributes = vertex_attributes;
-    pipeline_info.vertex_input_state.num_vertex_attributes = 3;
-
-    pipeline_info.target_info.num_color_targets = 1;
-    pipeline_info.target_info.color_target_descriptions =
-        &color_target_description;
-    pipeline_info.target_info.has_depth_stencil_target = true;
-    pipeline_info.target_info.depth_stencil_format = depth_texture_format;
-
-    graphics_pipeline = SDL_CreateGPUGraphicsPipeline(
+    SDL_GPUTextureFormat color_format =
+        SDL_GetGPUSwapchainTextureFormat(
+            gpu_device,
+            window
+        );
+    
+    graphics_pipeline = pipeline_create(
         gpu_device,
-        &pipeline_info
+        vertex_shader,
+        fragment_shader,
+        color_format,
+        depth_texture_format,
+        SDL_GPU_FILLMODE_FILL
     );
 
     if (!graphics_pipeline) {
-        SDL_Log("Could not create graphics pipeline: %s", SDL_GetError());
         shutdown();
         return false;
     }
 
-    pipeline_info.fragment_shader = wireframe_fragment_shader;
-    pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
-
-    wireframe_pipeline = SDL_CreateGPUGraphicsPipeline(
+    wireframe_pipeline = pipeline_create(
         gpu_device,
-        &pipeline_info
+        vertex_shader,
+        wireframe_fragment_shader,
+        color_format,
+        depth_texture_format,
+        SDL_GPU_FILLMODE_LINE
     );
 
     if (!wireframe_pipeline) {
-        SDL_Log("Could not create wireframe pipeline: %s", SDL_GetError());
         shutdown();
         return false;
     }
@@ -787,9 +747,9 @@ bool render(
                     0.0f
                 },
                 .light_position = {-0.75f, 1.25f, -1.25f, 0.0f},
-                .ambient_strength = 0.15f,
-                .point_light_strength = 0.8f,
-                .falloff_distance = 3.0f
+                .ambient_strength = 0.25f,
+                .point_light_strength = 1.0f,
+                .falloff_distance = 5.0f
             };
 
             SDL_PushGPUFragmentUniformData(
