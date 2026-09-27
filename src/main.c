@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <math.h>
@@ -8,9 +6,7 @@
 
 #include "math3d.h"
 #include "mesh.h"
-#include "pipeline.h"
 #include "renderer.h"
-#include "shader.h"
 #include "texture.h"
 
 static const int width = 800;
@@ -18,13 +14,7 @@ static const int height = 600;
 
 static SDL_Window *window = NULL;
 
-static Renderer renderer = {
-    .depth_texture_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM
-};
-
-static SDL_GPUShader *vertex_shader = NULL;
-static SDL_GPUShader *fragment_shader = NULL;
-static SDL_GPUShader *wireframe_fragment_shader = NULL;
+static Renderer renderer = {0};
 
 static const Uint32 checker_texture_width = 16;
 static const Uint32 checker_texture_height = 16;
@@ -208,9 +198,9 @@ static const Vertex floor_vertices[] = {
 };
 
 // -------------------- Init / Shutdown --------------------
-void shutdown(void);
+static void shutdown(void);
 
-bool init(void) {
+static bool init(void) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init Error: %s", SDL_GetError());
         return false;
@@ -229,20 +219,7 @@ bool init(void) {
         return false;
     }
 
-    renderer.device = SDL_CreateGPUDevice(
-        SDL_GPU_SHADERFORMAT_MSL,
-        true, // enable GPU validation for dev.
-        NULL // default device
-    );
-
-    if (!renderer.device) {
-        SDL_Log("GPU device creation failed: %s", SDL_GetError());
-        shutdown();
-        return false;
-    }
-
-    if (!SDL_ClaimWindowForGPUDevice(renderer.device, window)) {
-        SDL_Log("Could not claim window for GPU: %s", SDL_GetError());
+    if (!renderer_init(&renderer, window)) {
         shutdown();
         return false;
     }
@@ -317,95 +294,7 @@ bool init(void) {
         return false;
     }
 
-    SDL_Log("Created cube mesh and uploaded checker texture");
-
-    vertex_shader = shader_load_msl(
-        renderer.device,
-        "shaders/triangle.vert.msl",
-        "vertex_main",
-        SDL_GPU_SHADERSTAGE_VERTEX,
-        0, // fragment/vertex sampler
-        1 // uniform buffer
-    );
-
-    if (!vertex_shader) {
-        shutdown();
-        return false;
-    }
-
-    fragment_shader = shader_load_msl(
-        renderer.device,
-        "shaders/triangle.frag.msl",
-        "fragment_main",
-        SDL_GPU_SHADERSTAGE_FRAGMENT,
-        1, // fragment/vertex sampler
-        2 // uniform buffer
-    );
-
-    if (!fragment_shader) {
-        shutdown();
-        return false;
-    }
-
-    wireframe_fragment_shader = shader_load_msl(
-        renderer.device,
-        "shaders/wireframe.frag.msl",
-        "fragment_main",
-        SDL_GPU_SHADERSTAGE_FRAGMENT,
-        0,
-        0
-    );
-
-    if (!wireframe_fragment_shader) {
-        shutdown();
-        return false;
-    }
-
-    SDL_Log("Created all GPU shaders");
-
-    SDL_GPUTextureFormat color_format =
-        SDL_GetGPUSwapchainTextureFormat(
-            renderer.device,
-            window
-        );
-    
-    renderer.filled_pipeline = pipeline_create(
-        renderer.device,
-        vertex_shader,
-        fragment_shader,
-        color_format,
-        renderer.depth_texture_format,
-        SDL_GPU_FILLMODE_FILL
-    );
-
-    if (!renderer.filled_pipeline) {
-        shutdown();
-        return false;
-    }
-
-    renderer.wireframe_pipeline = pipeline_create(
-        renderer.device,
-        vertex_shader,
-        wireframe_fragment_shader,
-        color_format,
-        renderer.depth_texture_format,
-        SDL_GPU_FILLMODE_LINE
-    );
-
-    if (!renderer.wireframe_pipeline) {
-        shutdown();
-        return false;
-    }
-
-    SDL_Log("Created fill and wireframe graphics pipelines");
-    
-    SDL_ReleaseGPUShader(renderer.device, vertex_shader);
-    SDL_ReleaseGPUShader(renderer.device, fragment_shader);
-    SDL_ReleaseGPUShader(renderer.device, wireframe_fragment_shader);
-
-    vertex_shader = NULL;
-    fragment_shader = NULL;
-    wireframe_fragment_shader = NULL;
+    SDL_Log("Created cube and floor meshes and uploaded checker texture");
 
     SDL_SetWindowPosition(window, 50, 100);
 
@@ -421,29 +310,8 @@ bool init(void) {
     return true;
 }
 
-void shutdown(void) {
+static void shutdown(void) {
     if (renderer.device) {
-        if (vertex_shader) {
-            SDL_ReleaseGPUShader(
-                renderer.device,
-                vertex_shader
-            );
-        }
-
-        if (fragment_shader) {
-            SDL_ReleaseGPUShader(
-                renderer.device,
-                fragment_shader
-            );
-        }
-
-        if (wireframe_fragment_shader) {
-            SDL_ReleaseGPUShader(
-                renderer.device,
-                wireframe_fragment_shader
-            );
-        }
-
         mesh_destroy(renderer.device, &cube_mesh);
         mesh_destroy(renderer.device, &floor_mesh);
 
@@ -462,7 +330,7 @@ void shutdown(void) {
 }
 
 // -------------------- Input --------------------
-void process_input(
+static void process_input(
     bool *quit,
     Camera *camera,
     bool *show_texture,
@@ -602,7 +470,7 @@ static void draw_render_object(
 
 
 // -------------------- Render --------------------
-bool render(
+static bool render(
     Camera camera,
     bool show_texture,
     bool show_wireframe,
@@ -754,7 +622,7 @@ bool render(
 }
 
 // -------------------- Game Loop --------------------
-void run(void) {
+static void run(void) {
     bool quit = false;
     bool show_texture = true;
     bool show_wireframe = false;

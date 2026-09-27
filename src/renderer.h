@@ -7,6 +7,7 @@
 
 typedef struct {
     SDL_GPUDevice *device;
+    bool window_claimed;
 
     SDL_GPUGraphicsPipeline *filled_pipeline;
     SDL_GPUGraphicsPipeline *wireframe_pipeline;
@@ -16,6 +17,11 @@ typedef struct {
     Uint32 depth_texture_width;
     Uint32 depth_texture_height;
 } Renderer;
+
+bool renderer_init(
+    Renderer *renderer,
+    SDL_Window *window
+);
 
 bool renderer_ensure_depth_texture(
     Renderer *renderer,
