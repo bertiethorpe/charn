@@ -197,6 +197,19 @@ static const Vertex floor_vertices[] = {
     }
 };
 
+static bool set_mouse_capture(bool enabled) {
+    if (!SDL_SetWindowRelativeMouseMode(window, enabled)) {
+        SDL_Log(
+            "Could not %s relative mouse mode: %s",
+            enabled ? "enable" : "disable",
+            SDL_GetError()
+        );
+        return false;
+    }
+
+    return true;
+}
+
 // -------------------- Init / Shutdown --------------------
 static void shutdown(void);
 
@@ -298,11 +311,7 @@ static bool init(void) {
 
     SDL_SetWindowPosition(window, 50, 100);
 
-    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
-        SDL_Log(
-            "Could not enable relative mouse mode: %s",
-            SDL_GetError()
-        );
+    if (!set_mouse_capture(true)) {
         shutdown();
         return false;
     }
@@ -346,8 +355,15 @@ static void process_input(
             *quit = true;
         }
         else if (event.type == SDL_EVENT_KEY_DOWN) {
-            if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-                *quit = true;
+            if (
+                event.key.scancode == SDL_SCANCODE_ESCAPE &&
+                !event.key.repeat
+            ) {
+                if (SDL_GetWindowRelativeMouseMode(window)) {
+                    set_mouse_capture(false);
+                } else {
+                    *quit = true;
+                }
             }
             else if (
                 event.key.scancode == SDL_SCANCODE_T &&
@@ -362,7 +378,23 @@ static void process_input(
                 *show_wireframe = !*show_wireframe;
             }
         }
-        else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        else if (
+            event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+            event.button.button == SDL_BUTTON_LEFT &&
+            !SDL_GetWindowRelativeMouseMode(window)
+        ) {
+            set_mouse_capture(true);
+        }
+        else if (
+            event.type == SDL_EVENT_WINDOW_FOCUS_LOST &&
+            SDL_GetWindowRelativeMouseMode(window)
+        ) {
+            set_mouse_capture(false);
+        }
+        else if (
+            event.type == SDL_EVENT_MOUSE_MOTION &&
+            SDL_GetWindowRelativeMouseMode(window)
+        ) {
             camera->yaw += // pointer required because this modifies the actual camera.
                 event.motion.xrel * mouse_sensitivity;
 
