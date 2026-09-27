@@ -9,6 +9,7 @@
 #include "math3d.h"
 #include "mesh.h"
 #include "pipeline.h"
+#include "renderer.h"
 #include "shader.h"
 #include "texture.h"
 
@@ -16,26 +17,19 @@ static const int width = 800;
 static const int height = 600;
 
 static SDL_Window *window = NULL;
-static SDL_GPUDevice *gpu_device = NULL;
+
+static Renderer renderer = {
+    .depth_texture_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM
+};
 
 static SDL_GPUShader *vertex_shader = NULL;
 static SDL_GPUShader *fragment_shader = NULL;
 static SDL_GPUShader *wireframe_fragment_shader = NULL;
-static SDL_GPUGraphicsPipeline *graphics_pipeline = NULL;
-static SDL_GPUGraphicsPipeline *wireframe_pipeline = NULL;
 
 static const Uint32 checker_texture_width = 16;
 static const Uint32 checker_texture_height = 16;
 static const Uint32 checker_square_size = 4;
 static const Uint32 checker_bytes_per_pixel = 4;
-
-static SDL_GPUTexture *depth_texture = NULL;
-
-static const SDL_GPUTextureFormat depth_texture_format =
-    SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-
-static Uint32 depth_texture_width = 0;
-static Uint32 depth_texture_height = 0;
 
 // ------------------------- Data --------------------------
 static Mesh cube_mesh = {0};
@@ -213,53 +207,6 @@ static const Vertex floor_vertices[] = {
     }
 };
 
-static bool ensure_depth_texture(
-    Uint32 texture_width,
-    Uint32 texture_height
-) {
-    if (depth_texture &&
-        depth_texture_width == texture_width &&
-        depth_texture_height == texture_height) {
-        return true;
-    }
-
-    if (depth_texture) {
-        SDL_ReleaseGPUTexture(gpu_device, depth_texture);
-        depth_texture = NULL;
-    }
-    
-    SDL_GPUTextureCreateInfo texture_info = {0};
-
-    texture_info.type = SDL_GPU_TEXTURETYPE_2D;
-    texture_info.format = depth_texture_format;
-    texture_info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-    texture_info.width = texture_width;
-    texture_info.height = texture_height;
-    texture_info.layer_count_or_depth = 1;
-    texture_info.num_levels = 1;
-    texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-
-    depth_texture =
-        SDL_CreateGPUTexture(gpu_device, &texture_info);
-
-    if (!depth_texture) {
-        depth_texture_width = 0;
-        depth_texture_height = 0;
-
-        SDL_Log(
-            "Could not create depth texture: %s",
-            SDL_GetError()
-        );
-
-        return false;
-    }
-
-    depth_texture_width = texture_width;
-    depth_texture_height = texture_height;
-
-    return true;
-}
-
 // -------------------- Init / Shutdown --------------------
 void shutdown(void);
 
@@ -282,19 +229,19 @@ bool init(void) {
         return false;
     }
 
-    gpu_device = SDL_CreateGPUDevice(
+    renderer.device = SDL_CreateGPUDevice(
         SDL_GPU_SHADERFORMAT_MSL,
         true, // enable GPU validation for dev.
         NULL // default device
     );
 
-    if (!gpu_device) {
+    if (!renderer.device) {
         SDL_Log("GPU device creation failed: %s", SDL_GetError());
         shutdown();
         return false;
     }
 
-    if (!SDL_ClaimWindowForGPUDevice(gpu_device, window)) {
+    if (!SDL_ClaimWindowForGPUDevice(renderer.device, window)) {
         SDL_Log("Could not claim window for GPU: %s", SDL_GetError());
         shutdown();
         return false;
@@ -327,7 +274,7 @@ bool init(void) {
     }
 
     if (!texture_create_rgba8(
-            gpu_device,
+            renderer.device,
             &checker_texture,
             checker_texture_width,
             checker_texture_height,
@@ -343,7 +290,7 @@ bool init(void) {
         (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0]));
 
     if (!mesh_create(
-            gpu_device,
+            renderer.device,
             &cube_mesh,
             cube_vertices,
             cube_vertex_count,
@@ -360,7 +307,7 @@ bool init(void) {
         (Uint32)(sizeof(floor_indices) / sizeof(floor_indices[0]));
 
     if (!mesh_create(
-            gpu_device,
+            renderer.device,
             &floor_mesh,
             floor_vertices,
             floor_vertex_count,
@@ -373,7 +320,7 @@ bool init(void) {
     SDL_Log("Created cube mesh and uploaded checker texture");
 
     vertex_shader = shader_load_msl(
-        gpu_device,
+        renderer.device,
         "shaders/triangle.vert.msl",
         "vertex_main",
         SDL_GPU_SHADERSTAGE_VERTEX,
@@ -387,7 +334,7 @@ bool init(void) {
     }
 
     fragment_shader = shader_load_msl(
-        gpu_device,
+        renderer.device,
         "shaders/triangle.frag.msl",
         "fragment_main",
         SDL_GPU_SHADERSTAGE_FRAGMENT,
@@ -401,7 +348,7 @@ bool init(void) {
     }
 
     wireframe_fragment_shader = shader_load_msl(
-        gpu_device,
+        renderer.device,
         "shaders/wireframe.frag.msl",
         "fragment_main",
         SDL_GPU_SHADERSTAGE_FRAGMENT,
@@ -418,43 +365,43 @@ bool init(void) {
 
     SDL_GPUTextureFormat color_format =
         SDL_GetGPUSwapchainTextureFormat(
-            gpu_device,
+            renderer.device,
             window
         );
     
-    graphics_pipeline = pipeline_create(
-        gpu_device,
+    renderer.filled_pipeline = pipeline_create(
+        renderer.device,
         vertex_shader,
         fragment_shader,
         color_format,
-        depth_texture_format,
+        renderer.depth_texture_format,
         SDL_GPU_FILLMODE_FILL
     );
 
-    if (!graphics_pipeline) {
+    if (!renderer.filled_pipeline) {
         shutdown();
         return false;
     }
 
-    wireframe_pipeline = pipeline_create(
-        gpu_device,
+    renderer.wireframe_pipeline = pipeline_create(
+        renderer.device,
         vertex_shader,
         wireframe_fragment_shader,
         color_format,
-        depth_texture_format,
+        renderer.depth_texture_format,
         SDL_GPU_FILLMODE_LINE
     );
 
-    if (!wireframe_pipeline) {
+    if (!renderer.wireframe_pipeline) {
         shutdown();
         return false;
     }
 
     SDL_Log("Created fill and wireframe graphics pipelines");
     
-    SDL_ReleaseGPUShader(gpu_device, vertex_shader);
-    SDL_ReleaseGPUShader(gpu_device, fragment_shader);
-    SDL_ReleaseGPUShader(gpu_device, wireframe_fragment_shader);
+    SDL_ReleaseGPUShader(renderer.device, vertex_shader);
+    SDL_ReleaseGPUShader(renderer.device, fragment_shader);
+    SDL_ReleaseGPUShader(renderer.device, wireframe_fragment_shader);
 
     vertex_shader = NULL;
     fragment_shader = NULL;
@@ -475,52 +422,42 @@ bool init(void) {
 }
 
 void shutdown(void) {
-    if (gpu_device) {
-        if (graphics_pipeline) {
-            SDL_ReleaseGPUGraphicsPipeline(
-                gpu_device,
-                graphics_pipeline
-            );
-        }
-
-        if (wireframe_pipeline) {
-            SDL_ReleaseGPUGraphicsPipeline(
-                gpu_device,
-                wireframe_pipeline
-            );
-        }
-
+    if (renderer.device) {
         if (vertex_shader) {
-            SDL_ReleaseGPUShader(gpu_device, vertex_shader);
+            SDL_ReleaseGPUShader(
+                renderer.device,
+                vertex_shader
+            );
         }
 
         if (fragment_shader) {
-            SDL_ReleaseGPUShader(gpu_device, fragment_shader);
+            SDL_ReleaseGPUShader(
+                renderer.device,
+                fragment_shader
+            );
         }
 
         if (wireframe_fragment_shader) {
-            SDL_ReleaseGPUShader(gpu_device, wireframe_fragment_shader);
+            SDL_ReleaseGPUShader(
+                renderer.device,
+                wireframe_fragment_shader
+            );
         }
 
-        mesh_destroy(gpu_device, &cube_mesh);
-        mesh_destroy(gpu_device, &floor_mesh);
-
-        if (depth_texture) {
-            SDL_ReleaseGPUTexture(gpu_device, depth_texture);
-        }
+        mesh_destroy(renderer.device, &cube_mesh);
+        mesh_destroy(renderer.device, &floor_mesh);
 
         texture_destroy(
-            gpu_device,
+            renderer.device,
             &checker_texture
         );
     }
 
-    if (gpu_device && window) {
-        SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
-    }
+    renderer_destroy(&renderer, window);
 
-    SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
+    window = NULL;
+
     SDL_Quit();
 }
 
@@ -673,7 +610,7 @@ bool render(
     size_t object_count
 ) {
     SDL_GPUCommandBuffer *command_buffer = 
-        SDL_AcquireGPUCommandBuffer(gpu_device);
+        SDL_AcquireGPUCommandBuffer(renderer.device);
 
     if (!command_buffer) {
         SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
@@ -697,7 +634,8 @@ bool render(
 
     // A minimized window may not have a swapchain texture.
     if (swapchain_texture) {
-        if (!ensure_depth_texture(
+        if (!renderer_ensure_depth_texture(
+                &renderer,
                 swapchain_width,
                 swapchain_height)) {
             SDL_CancelGPUCommandBuffer(command_buffer);
@@ -717,7 +655,7 @@ bool render(
 
         SDL_GPUDepthStencilTargetInfo depth_target = {0};
 
-        depth_target.texture = depth_texture;
+        depth_target.texture = renderer.depth_texture;
         depth_target.clear_depth = 1.0f;
         depth_target.load_op = SDL_GPU_LOADOP_CLEAR;
         depth_target.store_op = SDL_GPU_STOREOP_DONT_CARE;
@@ -734,7 +672,9 @@ bool render(
             );
 
         SDL_GPUGraphicsPipeline *active_pipeline =
-            show_wireframe ? wireframe_pipeline : graphics_pipeline;
+            show_wireframe
+                ? renderer.wireframe_pipeline
+                : renderer.filled_pipeline;
 
         SDL_BindGPUGraphicsPipeline(render_pass, active_pipeline);
 
