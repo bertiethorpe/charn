@@ -87,6 +87,17 @@ Mat4 mat4_multiply(Mat4 left, Mat4 right) {
     return result;
 }
 
+Mat4 mat4_scale(float x, float y, float z) {
+    return (Mat4){
+        .values = {
+            x,    0.0f, 0.0f, 0.0f,
+            0.0f, y,    0.0f, 0.0f,
+            0.0f, 0.0f, z,    0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f
+        }
+    };
+}
+
 Mat4 mat4_translation(float x, float y, float z) {
     Mat4 result = mat4_identity();
 
@@ -121,6 +132,20 @@ Mat4 mat4_rotation_x(float angle) {
             0.0f,  c,    s,    0.0f,
             0.0f, -s,    c,    0.0f,
             0.0f,  0.0f, 0.0f, 1.0f
+        }
+    };
+}
+
+Mat4 mat4_rotation_z(float angle) {
+    float c = cosf(angle);
+    float s = sinf(angle);
+
+    return (Mat4){
+        .values = {
+             c,    s,    0.0f, 0.0f,
+            -s,    c,    0.0f, 0.0f,
+             0.0f, 0.0f, 1.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 1.0f
         }
     };
 }

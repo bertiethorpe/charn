@@ -8,6 +8,7 @@
 #include "mesh.h"
 #include "renderer.h"
 #include "texture.h"
+#include "transform.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -43,7 +44,7 @@ static Material floor_material = {
 typedef struct {
     Mesh *mesh;
     Material *material;
-    Mat4 model;
+    Transform transform;
 } RenderObject;
 
 typedef struct {
@@ -462,14 +463,13 @@ static void draw_render_object(
         );
     }
 
-    Mat4 view_model = mat4_multiply(
-        view,
-        object->model
-    );
+    Mat4 model = transform_to_matrix(object->transform);
+
+    Mat4 view_model = mat4_multiply(view, model);
 
     VertexUniforms uniforms = {
         .transform = mat4_multiply(projection, view_model),
-        .model = object->model
+        .model = model
     };
 
     SDL_PushGPUVertexUniformData(
@@ -672,20 +672,32 @@ static void run(void) {
 
     RenderObject objects[] = {
         {
-            .mesh     = &cube_mesh,
-            .material = &cube_material,
-            .model    = mat4_identity()
+            .mesh      = &cube_mesh,
+            .material  = &cube_material,
+            .transform = transform_identity()
         },
         {
-            .mesh     = &cube_mesh,
-            .material = &cube_material,
-            .model    = mat4_translation(1.5f, 0.0f, 1.0f)
+            .mesh      = &cube_mesh,
+            .material  = &cube_material,
+            .transform = transform_identity()
         },
         {
-            .mesh     = &floor_mesh,
-            .material = &floor_material,
-            .model    = mat4_translation(0.0f, -1.0f, 0.0f)
+            .mesh      = &floor_mesh,
+            .material  = &floor_material,
+            .transform = transform_identity()
         }
+    };
+
+    objects[1].transform.position = (Vec3){
+        .x = 1.5f,
+        .y = 0.0f,
+        .z = 1.0f
+    };
+
+    objects[2].transform.position = (Vec3){
+        .x = 0.0f,
+        .y = -1.0f,
+        .z = 0.0f
     };
 
     const size_t object_count =
@@ -782,9 +794,8 @@ static void run(void) {
             angle_y -= two_pi;
         }
 
-        Mat4 rotation_x = mat4_rotation_x(angle_x);
-        Mat4 rotation_y = mat4_rotation_y(angle_y);
-        objects[0].model = mat4_multiply(rotation_y, rotation_x);
+        objects[0].transform.rotation.x = angle_x;
+        objects[0].transform.rotation.y = angle_y;
 
         if (!render(
                 camera,

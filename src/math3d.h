@@ -21,9 +21,11 @@ Vec3 vec3_normalise(Vec3 vector);
 
 Mat4 mat4_identity(void);
 Mat4 mat4_multiply(Mat4 left, Mat4 right);
+Mat4 mat4_scale(float x, float y, float z);
 Mat4 mat4_translation(float x, float y, float z);
 Mat4 mat4_rotation_y(float angle);
 Mat4 mat4_rotation_x(float angle);
+Mat4 mat4_rotation_z(float angle);
 Mat4 mat4_perspective_projection(
     float vertical_fov,
     float aspect,
