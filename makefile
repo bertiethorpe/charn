@@ -5,11 +5,11 @@ CC = clang
 TARGET = test
 
 # Source files
-SRC = src/main.c src/math3d.c src/mesh.c src/texture.c src/shader.c src/pipeline.c \
-	  src/renderer.c src/transform.c
+SRC = src/main.c src/math3d.c src/mesh.c src/texture.c src/shader.c \
+	  src/pipeline.c src/renderer.c src/transform.c src/world.c
 
-HEADERS = src/math3d.h src/mesh.h src/texture.h src/shader.h src/pipeline.h \
-		  src/renderer.h src/transform.h
+HEADERS = src/math3d.h src/mesh.h src/texture.h src/shader.h \
+		  src/pipeline.h src/renderer.h src/transform.h src/world.h
 
 # Compiler & linker flags from pkg-config
 CFLAGS = -Wall -Wextra -std=c99 $(shell pkg-config --cflags sdl3)

@@ -9,6 +9,7 @@
 #include "renderer.h"
 #include "texture.h"
 #include "transform.h"
+#include "world.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -42,9 +43,9 @@ static Material floor_material = {
 };
 
 typedef struct {
+    EntityId entity;
     Mesh *mesh;
     Material *material;
-    Transform transform;
 } RenderObject;
 
 typedef struct {
@@ -417,6 +418,7 @@ static void draw_render_object(
     SDL_GPUCommandBuffer *command_buffer,
     SDL_GPURenderPass *render_pass,
     const RenderObject *object,
+    const Transform *transform,
     Mat4 view,
     Mat4 projection,
     bool show_wireframe
@@ -463,7 +465,7 @@ static void draw_render_object(
         );
     }
 
-    Mat4 model = transform_to_matrix(object->transform);
+    Mat4 model = transform_to_matrix(*transform);
 
     Mat4 view_model = mat4_multiply(view, model);
 
@@ -503,6 +505,7 @@ static void draw_render_object(
 
 // -------------------- Render --------------------
 static bool render(
+    const World *world,
     Camera camera,
     bool show_texture,
     bool show_wireframe,
@@ -632,10 +635,20 @@ static bool render(
         );
 
         for (size_t i = 0; i < object_count; ++i) {
+            const Transform *transform = world_get_transform_const(
+                world,
+                objects[i].entity
+            );
+            
+            if (!transform) {
+                continue;
+            }
+
             draw_render_object(
                 command_buffer,
                 render_pass,
                 &objects[i],
+                transform,
                 view,
                 projection,
                 show_wireframe
@@ -663,41 +676,72 @@ static void run(void) {
     Camera camera = {
         .position = {
             .x = 0.0f,
-            .y = 0.0f,
-            .z = -2.0f
+            .y = 1.2f,
+            .z = -4.0f
         },
         .yaw = 0.0f,
         .pitch = 0.0f
     };
 
-    RenderObject objects[] = {
-        {
-            .mesh      = &cube_mesh,
-            .material  = &cube_material,
-            .transform = transform_identity()
-        },
-        {
-            .mesh      = &cube_mesh,
-            .material  = &cube_material,
-            .transform = transform_identity()
-        },
-        {
-            .mesh      = &floor_mesh,
-            .material  = &floor_material,
-            .transform = transform_identity()
-        }
+    World world;
+    world_init(&world);
+
+    EntityId rotating_cube = world_create_entity(&world);
+    EntityId static_cube = world_create_entity(&world);
+    EntityId floor = world_create_entity(&world);
+
+    Transform *rotating_cube_transform =
+        world_get_transform(&world, rotating_cube);
+
+    Transform *static_cube_transform =
+        world_get_transform(&world, static_cube);
+
+    Transform *floor_transform =
+        world_get_transform(&world, floor);
+
+    if (
+        !rotating_cube_transform ||
+        !static_cube_transform ||
+        !floor_transform
+    ) {
+        SDL_Log("Could not create scene entities");
+        return;
+    }
+
+    rotating_cube_transform->position = (Vec3){
+        .x = 0.0f,
+        .y = 1.0f,
+        .z = 0.0f
     };
 
-    objects[1].transform.position = (Vec3){
+    static_cube_transform->position = (Vec3){
         .x = 1.5f,
-        .y = 0.0f,
+        .y = 0.5f,
         .z = 1.0f
     };
 
-    objects[2].transform.position = (Vec3){
+    floor_transform->position = (Vec3){
         .x = 0.0f,
-        .y = -1.0f,
+        .y = 0.0f,
         .z = 0.0f
+    };
+
+    RenderObject objects[] = {
+        {
+            .entity   = rotating_cube,
+            .mesh     = &cube_mesh,
+            .material = &cube_material
+        },
+        {
+            .entity   = static_cube,
+            .mesh     = &cube_mesh,
+            .material = &cube_material
+        },
+        {
+            .entity   = floor,
+            .mesh     = &floor_mesh,
+            .material = &floor_material
+        }
     };
 
     const size_t object_count =
@@ -794,10 +838,16 @@ static void run(void) {
             angle_y -= two_pi;
         }
 
-        objects[0].transform.rotation.x = angle_x;
-        objects[0].transform.rotation.y = angle_y;
+        Transform *rotating_cube_transform =
+            world_get_transform(&world, rotating_cube);
+
+        if (rotating_cube_transform) {
+            rotating_cube_transform->rotation.x = angle_x;
+            rotating_cube_transform->rotation.y = angle_y;
+        }
 
         if (!render(
+                &world,
                 camera,
                 show_texture,
                 show_wireframe,
