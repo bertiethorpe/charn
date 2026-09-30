@@ -581,6 +581,15 @@ static bool render(
                 &depth_target
             );
 
+        if (!render_pass) {
+            SDL_Log(
+                "Could not begin GPU render pass: %s",
+                SDL_GetError()
+            );
+            SDL_CancelGPUCommandBuffer(command_buffer);
+            return false;
+        }
+
         SDL_GPUGraphicsPipeline *active_pipeline =
             show_wireframe
                 ? renderer.wireframe_pipeline
