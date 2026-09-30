@@ -42,10 +42,22 @@ static Material floor_material = {
     .tint    = {1.0f, 0.70f, 0.65f, 1.0f}
 };
 
+// Proper asset manager to replace these eventually
+enum { MESH_CUBE, MESH_FLOOR, MESH_COUNT };
+enum { MATERIAL_CUBE, MATERIAL_FLOOR, MATERIAL_COUNT };
+
+static Mesh *mesh_assets[MESH_COUNT] = {
+    &cube_mesh, &floor_mesh
+};
+
+static Material *material_assets[MATERIAL_COUNT] = {
+    &cube_material, &floor_material
+};
+
 typedef struct {
-    EntityId entity;
-    Mesh *mesh;
-    Material *material;
+    const Mesh *mesh;
+    const Material *material;
+    Mat4 model;
 } RenderObject;
 
 typedef struct {
@@ -419,12 +431,12 @@ static void draw_render_object(
     SDL_GPUCommandBuffer *command_buffer,
     SDL_GPURenderPass *render_pass,
     const RenderObject *object,
-    const Transform *transform,
     Mat4 view,
     Mat4 projection,
     bool show_wireframe
 ) {
     const Mesh *mesh = object->mesh;
+    const Material *material = object->material;
 
     SDL_GPUBufferBinding vertex_binding = {
         .buffer = mesh->vertex_buffer,
@@ -450,7 +462,6 @@ static void draw_render_object(
     );
 
     if (!show_wireframe) {
-        const Material *material = object->material;
         const Texture *texture = material->texture;
 
         SDL_GPUTextureSamplerBinding material_binding = {
@@ -466,7 +477,7 @@ static void draw_render_object(
         );
     }
 
-    Mat4 model = transform_to_matrix(*transform);
+    Mat4 model = object->model;
 
     Mat4 normal_matrix;
     if (!mat4_normal_matrix(model, &normal_matrix)) {
@@ -489,8 +500,6 @@ static void draw_render_object(
     );
 
     if (!show_wireframe) {
-        const Material *material = object->material;
-
         SDL_PushGPUFragmentUniformData(
             command_buffer,
             1,
@@ -512,7 +521,6 @@ static void draw_render_object(
 
 // -------------------- Render --------------------
 static bool render(
-    const World *world,
     Camera camera,
     bool show_texture,
     bool show_wireframe,
@@ -651,20 +659,10 @@ static bool render(
         );
 
         for (size_t i = 0; i < object_count; ++i) {
-            const Transform *transform = world_get_transform_const(
-                world,
-                objects[i].entity
-            );
-            
-            if (!transform) {
-                continue;
-            }
-
             draw_render_object(
                 command_buffer,
                 render_pass,
                 &objects[i],
-                transform,
                 view,
                 projection,
                 show_wireframe
@@ -742,26 +740,21 @@ static void run(void) {
         .z = 0.0f
     };
 
-    RenderObject objects[] = {
-        {
-            .entity   = rotating_cube,
-            .mesh     = &cube_mesh,
-            .material = &cube_material
-        },
-        {
-            .entity   = static_cube,
-            .mesh     = &cube_mesh,
-            .material = &cube_material
-        },
-        {
-            .entity   = floor,
-            .mesh     = &floor_mesh,
-            .material = &floor_material
-        }
-    };
-
-    const size_t object_count =
-        sizeof(objects) / sizeof(objects[0]);
+    if (!world_set_mesh_renderer(
+            &world, rotating_cube,
+            (MeshRenderer){MESH_CUBE, MATERIAL_CUBE}
+        ) ||
+        !world_set_mesh_renderer(
+            &world, static_cube,
+            (MeshRenderer){MESH_CUBE, MATERIAL_CUBE}
+        ) ||
+        !world_set_mesh_renderer(
+            &world, floor,
+            (MeshRenderer){MESH_FLOOR, MATERIAL_FLOOR}
+        )) {
+        SDL_Log("Could not assign scene meshes");
+        return;
+    }
 
     const float two_pi = 6.28318530718f;
     const float camera_speed = 4.0f;
@@ -862,8 +855,32 @@ static void run(void) {
             rotating_cube_transform->rotation.y = angle_y;
         }
 
+        RenderObject objects[WORLD_MAX_ENTITIES];
+        size_t object_count = 0;
+
+        for (uint32_t index = 0; index < WORLD_MAX_ENTITIES; ++index) {
+            EntityId entity = {index, world.generations[index]};
+
+            const MeshRenderer *visual =
+                world_get_mesh_renderer_const(&world, entity);
+            
+            if (!visual ||
+                visual->mesh_id >= MESH_COUNT ||
+                visual->material_id >= MATERIAL_COUNT) {
+                continue;
+            }
+
+            const Transform *transform =
+                world_get_transform_const(&world, entity);
+            
+            objects[object_count++] = (RenderObject) {
+                .mesh = mesh_assets[visual->mesh_id],
+                .material = material_assets[visual->material_id],
+                .model = transform_to_matrix(*transform)
+            };
+        }
+
         if (!render(
-                &world,
                 camera,
                 show_texture,
                 show_wireframe,
