@@ -39,7 +39,7 @@ static Material cube_material = {
 };
 static Material floor_material = {
     .texture = &checker_texture,
-    .tint    = {1.0f, 0.70f, 0.65f, 1.0f}
+    .tint    = {0.85f, 0.42f, 0.32f, 1.0f}
 };
 
 // Proper asset manager to replace these eventually
@@ -265,7 +265,7 @@ static bool init(void) {
                 ((x / checker_square_size) +
                  (y / checker_square_size)) % 2u == 0u;
 
-            Uint8 color = bright_square ? 255 : 32;
+            Uint8 color = bright_square ? 196 : 142;
 
             Uint32 pixel_offset =
                 (y * checker_texture_width + x) *
@@ -613,10 +613,10 @@ static bool render(
                     0.0f,
                     0.0f
                 },
-                .light_position = {-0.75f, 1.25f, -1.25f, 0.0f},
-                .ambient_strength = 0.25f,
+                .light_position = {-1.25f, 2.25f, -1.25f, 0.0f},
+                .ambient_strength = 0.45f,
                 .point_light_strength = 1.0f,
-                .falloff_distance = 5.0f
+                .falloff_distance = 7.0f
             };
 
             SDL_PushGPUFragmentUniformData(
@@ -899,7 +899,7 @@ static void run(void) {
                 SDL_snprintf(
                     window_title,
                     sizeof(window_title),
-                    "3D Engine | FPS: %.1f",
+                    "FPS: %.1f",
                     average_fps
                 );
                 SDL_SetWindowTitle(window, window_title);
