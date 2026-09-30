@@ -10,6 +10,7 @@ typedef struct {
 } Transform;
 
 Transform transform_identity(void);
+
 Mat4 transform_to_matrix(Transform transform);
 
 #endif

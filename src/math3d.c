@@ -87,6 +87,49 @@ Mat4 mat4_multiply(Mat4 left, Mat4 right) {
     return result;
 }
 
+bool mat4_normal_matrix(Mat4 model, Mat4 *result) {
+    if (!result) {
+        return false;
+    }
+
+    Vec3 x = {
+        model.values[0], model.values[1], model.values[2]
+    };
+    Vec3 y = {
+        model.values[4], model.values[5], model.values[6]
+    };
+    Vec3 z = {
+        model.values[8], model.values[9], model.values[10]
+    };
+
+    Vec3 normal_x = vec3_cross(y, z);
+    Vec3 normal_y = vec3_cross(z, x);
+    Vec3 normal_z = vec3_cross(x, y);
+
+    float determinant = vec3_dot(x, normal_x);
+    if (determinant == 0.0f) {
+        return false;
+    }
+
+    float inverse_determinant = 1.0f / determinant;
+    Mat4 normal = mat4_identity();
+
+    normal.values[0]  = normal_x.x * inverse_determinant;
+    normal.values[1]  = normal_x.y * inverse_determinant;
+    normal.values[2]  = normal_x.z * inverse_determinant;
+
+    normal.values[4]  = normal_y.x * inverse_determinant;
+    normal.values[5]  = normal_y.y * inverse_determinant;
+    normal.values[6]  = normal_y.z * inverse_determinant;
+
+    normal.values[8]  = normal_z.x * inverse_determinant;
+    normal.values[9]  = normal_z.y * inverse_determinant;
+    normal.values[10] = normal_z.z * inverse_determinant;
+
+    *result = normal;
+    return true;
+}
+
 Mat4 mat4_scale(float x, float y, float z) {
     return (Mat4){
         .values = {

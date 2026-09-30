@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #ifndef MATH3D_H
 #define MATH3D_H
 
@@ -21,6 +23,7 @@ Vec3 vec3_normalise(Vec3 vector);
 
 Mat4 mat4_identity(void);
 Mat4 mat4_multiply(Mat4 left, Mat4 right);
+bool mat4_normal_matrix(Mat4 model, Mat4 *result);
 Mat4 mat4_scale(float x, float y, float z);
 Mat4 mat4_translation(float x, float y, float z);
 Mat4 mat4_rotation_y(float angle);

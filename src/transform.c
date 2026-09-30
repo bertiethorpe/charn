@@ -8,6 +8,16 @@ Transform transform_identity(void) {
     };
 }
 
+static Mat4 transform_rotation_matrix(Transform transform) {
+    return mat4_multiply(
+        mat4_rotation_z(transform.rotation.z),
+        mat4_multiply(
+            mat4_rotation_y(transform.rotation.y),
+            mat4_rotation_x(transform.rotation.x)
+        )
+    );
+}
+
 Mat4 transform_to_matrix(Transform transform) {
     Mat4 translation = mat4_translation(
         transform.position.x,
@@ -15,19 +25,12 @@ Mat4 transform_to_matrix(Transform transform) {
         transform.position.z
     );
 
-    Mat4 rotation_x = mat4_rotation_x(transform.rotation.x);
-    Mat4 rotation_y = mat4_rotation_y(transform.rotation.y);
-    Mat4 rotation_z = mat4_rotation_z(transform.rotation.z);
+    Mat4 rotation = transform_rotation_matrix(transform);
 
     Mat4 scale = mat4_scale(
         transform.scale.x,
         transform.scale.y,
         transform.scale.z
-    );
-
-    Mat4 rotation = mat4_multiply(
-        rotation_z,
-        mat4_multiply(rotation_y, rotation_x)
     );
 
     return mat4_multiply(

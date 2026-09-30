@@ -51,6 +51,7 @@ typedef struct {
 typedef struct {
     Mat4 transform;
     Mat4 model;
+    Mat4 normal_matrix;
 } VertexUniforms;
 
 typedef struct {
@@ -467,11 +468,17 @@ static void draw_render_object(
 
     Mat4 model = transform_to_matrix(*transform);
 
+    Mat4 normal_matrix;
+    if (!mat4_normal_matrix(model, &normal_matrix)) {
+        return;
+    }
+
     Mat4 view_model = mat4_multiply(view, model);
 
     VertexUniforms uniforms = {
         .transform = mat4_multiply(projection, view_model),
-        .model = model
+        .model = model,
+        .normal_matrix = normal_matrix
     };
 
     SDL_PushGPUVertexUniformData(
