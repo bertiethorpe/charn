@@ -191,7 +191,7 @@ static void process_input(
 }
 
 // -------------------- Game Loop --------------------
-static void run(void) {
+static bool run(void) {
     bool quit = false;
     bool show_texture = true;
     bool show_wireframe = false;
@@ -213,7 +213,7 @@ static void run(void) {
             &demo_assets.floor_mesh,
             &demo_assets.cube_material,
             &demo_assets.floor_material)) {
-        return;
+        return false;
     }
 
     const float camera_speed = 5.0f;
@@ -313,7 +313,7 @@ static void run(void) {
                 show_wireframe,
                 scene.objects,
                 scene.object_count)) {
-            quit = true;
+            return false;
         } else {
             fps_elapsed += dt;
             ++fps_frame_count;
@@ -336,6 +336,8 @@ static void run(void) {
             }
         }
     }
+
+    return true;
 }
 
 // -------------------- Main --------------------
@@ -344,8 +346,8 @@ int main(void) {
         return 1;
     }
 
-    run();
+    bool success = run();
     shutdown();
 
-    return 0;
+    return success ? 0 : 1;
 }
