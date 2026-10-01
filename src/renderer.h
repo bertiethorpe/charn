@@ -2,8 +2,24 @@
 #define RENDERER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include <SDL3/SDL.h>
+
+#include "mesh.h"
+#include "texture.h"
+#include "world.h"
+
+typedef struct {
+    Texture *texture;
+    float tint[4];
+} Material;
+
+typedef struct {
+    EntityId entity;
+    const Mesh *mesh;
+    const Material *material;
+} RenderObject;
 
 typedef struct {
     SDL_GPUDevice *device;
@@ -27,6 +43,18 @@ bool renderer_ensure_depth_texture(
     Renderer *renderer,
     Uint32 width,
     Uint32 height
+);
+
+bool renderer_draw(
+    Renderer *renderer,
+    SDL_Window *window,
+    const World *world,
+    Mat4 view,
+    Vec3 light_position,
+    bool show_texture,
+    bool show_wireframe,
+    const RenderObject *objects,
+    size_t object_count
 );
 
 void renderer_destroy(

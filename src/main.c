@@ -27,11 +27,6 @@ static const Uint32 checker_bytes_per_pixel = 4;
 static Mesh cube_mesh = {0};
 static Mesh floor_mesh = {0};
 
-typedef struct {
-    Texture *texture;
-    float tint[4];
-} Material;
-
 static Texture checker_texture = {0};
 static Material cube_material = {
     .texture = &checker_texture,
@@ -41,27 +36,6 @@ static Material floor_material = {
     .texture = &checker_texture,
     .tint    = {0.85f, 0.42f, 0.32f, 1.0f}
 };
-
-typedef struct {
-    EntityId entity;
-    const Mesh *mesh;
-    const Material *material;
-} RenderObject;
-
-typedef struct {
-    Mat4 transform;
-    Mat4 model;
-    Mat4 normal_matrix;
-} VertexUniforms;
-
-typedef struct {
-    float texture_mix[4];
-    float light_position[4];
-    float ambient_strength;
-    float point_light_strength;
-    float falloff_distance;
-    float padding;
-} FragmentUniforms;
 
 typedef struct {
     Vec3 position;
@@ -75,6 +49,19 @@ static Vec3 camera_forward_direction(Camera camera) {
         .y = sinf(camera.pitch),
         .z = cosf(camera.pitch) * cosf(camera.yaw)
     };
+}
+
+static Mat4 camera_view_matrix(Camera camera) {
+    Vec3 target = vec3_add(
+        camera.position,
+        camera_forward_direction(camera)
+    );
+
+    return mat4_look_at(
+        camera.position,
+        target,
+        (Vec3){0.0f, 1.0f, 0.0f}
+    );
 }
 
 static const Uint16 cube_indices[] = {
@@ -346,7 +333,8 @@ static void process_input(
     bool *quit,
     Camera *camera,
     bool *show_texture,
-    bool *show_wireframe
+    bool *show_wireframe,
+    bool *light_follows_camera
 ) {
     const float mouse_sensitivity = 0.0025f;
     const float maximum_pitch = 1.553343f;
@@ -379,6 +367,12 @@ static void process_input(
                 !event.key.repeat
             ) {
                 *show_wireframe = !*show_wireframe;
+            }
+            else if (
+                event.key.scancode == SDL_SCANCODE_L &&
+                !event.key.repeat
+            ) {
+                *light_follows_camera = !*light_follows_camera;
             }
         }
         else if (
@@ -415,276 +409,12 @@ static void process_input(
     }
 }
 
-static void draw_render_object(
-    SDL_GPUCommandBuffer *command_buffer,
-    SDL_GPURenderPass *render_pass,
-    const RenderObject *object,
-    const Transform *transform,
-    Mat4 view,
-    Mat4 projection,
-    bool show_wireframe
-) {
-    const Mesh *mesh = object->mesh;
-    const Material *material = object->material;
-
-    SDL_GPUBufferBinding vertex_binding = {
-        .buffer = mesh->vertex_buffer,
-        .offset = 0
-    };
-
-    SDL_BindGPUVertexBuffers(
-        render_pass,
-        0,
-        &vertex_binding,
-        1
-    );
-
-    SDL_GPUBufferBinding index_binding = {
-        .buffer = mesh->index_buffer,
-        .offset = 0
-    };
-
-    SDL_BindGPUIndexBuffer(
-        render_pass,
-        &index_binding,
-        SDL_GPU_INDEXELEMENTSIZE_16BIT
-    );
-
-    if (!show_wireframe) {
-        const Texture *texture = material->texture;
-
-        SDL_GPUTextureSamplerBinding material_binding = {
-            .texture = texture->texture,
-            .sampler = texture->sampler
-        };
-
-        SDL_BindGPUFragmentSamplers(
-            render_pass,
-            0,
-            &material_binding,
-            1
-        );
-    }
-
-    Mat4 model = transform_to_matrix(*transform);
-
-    Mat4 normal_matrix;
-    if (!mat4_normal_matrix(model, &normal_matrix)) {
-        return;
-    }
-
-    Mat4 view_model = mat4_multiply(view, model);
-
-    VertexUniforms uniforms = {
-        .transform = mat4_multiply(projection, view_model),
-        .model = model,
-        .normal_matrix = normal_matrix
-    };
-
-    SDL_PushGPUVertexUniformData(
-        command_buffer,
-        0,
-        &uniforms,
-        sizeof(uniforms)
-    );
-
-    if (!show_wireframe) {
-        SDL_PushGPUFragmentUniformData(
-            command_buffer,
-            1,
-            material->tint,
-            sizeof(material->tint)
-        );
-    }
-
-    SDL_DrawGPUIndexedPrimitives(
-        render_pass,
-        mesh->index_count,
-        1,
-        0,
-        0,
-        0
-    );
-}
-
-
-// -------------------- Render --------------------
-static bool render(
-    const World *world,
-    Camera camera,
-    bool show_texture,
-    bool show_wireframe,
-    const RenderObject *objects,
-    size_t object_count
-) {
-    SDL_GPUCommandBuffer *command_buffer = 
-        SDL_AcquireGPUCommandBuffer(renderer.device);
-
-    if (!command_buffer) {
-        SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
-        return false;
-    }
-
-    SDL_GPUTexture *swapchain_texture = NULL;
-    Uint32 swapchain_width = 0;
-    Uint32 swapchain_height = 0;
-
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(
-            command_buffer,
-            window,
-            &swapchain_texture,
-            &swapchain_width,
-            &swapchain_height)) {
-        SDL_Log("Could not acquire swapchain texture: %s", SDL_GetError());
-        SDL_CancelGPUCommandBuffer(command_buffer);
-        return false;
-    }
-
-    // A minimized window may not have a swapchain texture.
-    if (swapchain_texture) {
-        if (!renderer_ensure_depth_texture(
-                &renderer,
-                swapchain_width,
-                swapchain_height)) {
-            SDL_CancelGPUCommandBuffer(command_buffer);
-            return false;
-        }
-
-        SDL_GPUColorTargetInfo color_target = {0};
-
-        color_target.texture = swapchain_texture;
-        color_target.clear_color =
-            (SDL_FColor){100.0f / 255.0f,
-                        149.0f / 255.0f,
-                        237.0f / 255.0f,
-                        1.0f};
-        color_target.load_op = SDL_GPU_LOADOP_CLEAR;
-        color_target.store_op = SDL_GPU_STOREOP_STORE;
-
-        SDL_GPUDepthStencilTargetInfo depth_target = {0};
-
-        depth_target.texture = renderer.depth_texture;
-        depth_target.clear_depth = 1.0f;
-        depth_target.load_op = SDL_GPU_LOADOP_CLEAR;
-        depth_target.store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depth_target.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
-        depth_target.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depth_target.cycle = true;
-
-        SDL_GPURenderPass *render_pass =
-            SDL_BeginGPURenderPass(
-                command_buffer,
-                &color_target,
-                1,
-                &depth_target
-            );
-
-        if (!render_pass) {
-            SDL_Log(
-                "Could not begin GPU render pass: %s",
-                SDL_GetError()
-            );
-            SDL_CancelGPUCommandBuffer(command_buffer);
-            return false;
-        }
-
-        SDL_GPUGraphicsPipeline *active_pipeline =
-            show_wireframe
-                ? renderer.wireframe_pipeline
-                : renderer.filled_pipeline;
-
-        SDL_BindGPUGraphicsPipeline(render_pass, active_pipeline);
-
-        if (!show_wireframe) {
-            FragmentUniforms fragment_uniforms = {
-                .texture_mix = {
-                    show_texture ? 1.0f : 0.0f,
-                    0.0f,
-                    0.0f,
-                    0.0f
-                },
-                .light_position = {-1.25f, 2.25f, -1.25f, 0.0f},
-                .ambient_strength = 0.45f,
-                .point_light_strength = 1.0f,
-                .falloff_distance = 7.0f
-            };
-
-            SDL_PushGPUFragmentUniformData(
-                command_buffer,
-                0,
-                &fragment_uniforms,
-                sizeof(fragment_uniforms)
-            );
-        }
-
-        float aspect =
-            (float)swapchain_width / (float)swapchain_height;
-        float vertical_fov =
-            60.0f * (3.14159265359f / 180.0f); // radians
-
-        Vec3 camera_forward = camera_forward_direction(camera);
-
-        Vec3 camera_target = vec3_add(
-            camera.position,
-            camera_forward
-        );
-
-        Vec3 world_up = {
-            .x = 0.0f,
-            .y = 1.0f,
-            .z = 0.0f
-        };
-
-        Mat4 view = mat4_look_at(
-            camera.position,
-            camera_target,
-            world_up
-        );
-
-        Mat4 projection = mat4_perspective_projection(
-            vertical_fov,
-            aspect,
-            0.1f,
-            100.0f
-        );
-
-        for (size_t i = 0; i < object_count; ++i) {
-            const Transform *transform = world_get_transform_const(
-                world,
-                objects[i].entity
-            );
-
-            if (!transform) {
-                continue;
-            }
-
-            draw_render_object(
-                command_buffer,
-                render_pass,
-                &objects[i],
-                transform,
-                view,
-                projection,
-                show_wireframe
-            );
-        }
-
-        SDL_EndGPURenderPass(render_pass);
-    }
-
-    if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
-        SDL_Log("Could not submit command buffer: %s", SDL_GetError());
-        return false;
-    }
-
-    return true;
-}
-
 // -------------------- Game Loop --------------------
 static void run(void) {
     bool quit = false;
     bool show_texture = true;
     bool show_wireframe = false;
+    bool light_follows_camera = false;
     float angle_x = 0.0f;
     float angle_y = 0.0f;
     Camera camera = {
@@ -703,6 +433,7 @@ static void run(void) {
     EntityId rotating_cube = world_create_entity(&world);
     EntityId static_cube = world_create_entity(&world);
     EntityId floor = world_create_entity(&world);
+    EntityId back_wall = world_create_entity(&world);
 
     Transform *rotating_cube_transform =
         world_get_transform(&world, rotating_cube);
@@ -713,10 +444,14 @@ static void run(void) {
     Transform *floor_transform =
         world_get_transform(&world, floor);
 
+    Transform *back_wall_transform =
+        world_get_transform(&world, back_wall);
+
     if (
         !rotating_cube_transform ||
         !static_cube_transform ||
-        !floor_transform
+        !floor_transform ||
+        !back_wall_transform
     ) {
         SDL_Log("Could not create scene entities");
         return;
@@ -740,6 +475,15 @@ static void run(void) {
         .z = 0.0f
     };
 
+    back_wall_transform->position = (Vec3){
+        .x = 0.0f,
+        .y = 2.5f,
+        .z = 5.0f
+    };
+
+    back_wall_transform->rotation.x = -1.5707963f;
+    back_wall_transform->scale.z = 0.5f;
+
     RenderObject objects[] = {
         {
             .entity = rotating_cube,
@@ -755,6 +499,11 @@ static void run(void) {
             .entity = floor,
             .mesh = &floor_mesh,
             .material = &floor_material
+        },
+        {
+            .entity = back_wall,
+            .mesh = &floor_mesh,
+            .material = &floor_material
         }
     };
 
@@ -768,6 +517,8 @@ static void run(void) {
     float fps_elapsed = 0.0f;
     Uint32 fps_frame_count = 0;
 
+    const Vec3 fixed_light_position = {-1.25f, 2.25f, -1.25f};
+
     while (!quit) {
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = (float)(now - last) / (float)frequency;
@@ -777,7 +528,8 @@ static void run(void) {
             &quit,
             &camera,
             &show_texture,
-            &show_wireframe
+            &show_wireframe,
+            &light_follows_camera
         );
 
         const bool *keyboard = SDL_GetKeyboardState(NULL);
@@ -854,9 +606,16 @@ static void run(void) {
         rotating_cube_transform->rotation.x = angle_x;
         rotating_cube_transform->rotation.y = angle_y;
 
-        if (!render(
+        Vec3 light_position = light_follows_camera
+            ? camera.position
+            : fixed_light_position;
+
+        if (!renderer_draw(
+                &renderer,
+                window,
                 &world,
-                camera,
+                camera_view_matrix(camera),
+                light_position,
                 show_texture,
                 show_wireframe,
                 objects,

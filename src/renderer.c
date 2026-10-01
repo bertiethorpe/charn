@@ -3,6 +3,21 @@
 #include "pipeline.h"
 #include "shader.h"
 
+typedef struct {
+    Mat4 transform;
+    Mat4 model;
+    Mat4 normal_matrix;
+} VertexUniforms;
+
+typedef struct {
+    float texture_mix[4];
+    float light_position[4];
+    float ambient_strength;
+    float point_light_strength;
+    float falloff_distance;
+    float padding;
+} FragmentUniforms;
+
 bool renderer_init(
     Renderer *renderer,
     SDL_Window *window
@@ -270,4 +285,262 @@ void renderer_destroy(
     }
 
     *renderer = (Renderer){0};
+}
+
+static void draw_render_object(
+    SDL_GPUCommandBuffer *command_buffer,
+    SDL_GPURenderPass *render_pass,
+    const RenderObject *object,
+    const Transform *transform,
+    Mat4 view,
+    Mat4 projection,
+    bool show_wireframe
+) {
+    const Mesh *mesh = object->mesh;
+    const Material *material = object->material;
+
+    SDL_GPUBufferBinding vertex_binding = {
+        .buffer = mesh->vertex_buffer,
+        .offset = 0
+    };
+
+    SDL_BindGPUVertexBuffers(
+        render_pass,
+        0,
+        &vertex_binding,
+        1
+    );
+
+    SDL_GPUBufferBinding index_binding = {
+        .buffer = mesh->index_buffer,
+        .offset = 0
+    };
+
+    SDL_BindGPUIndexBuffer(
+        render_pass,
+        &index_binding,
+        SDL_GPU_INDEXELEMENTSIZE_16BIT
+    );
+
+    if (!show_wireframe) {
+        const Texture *texture = material->texture;
+
+        SDL_GPUTextureSamplerBinding material_binding = {
+            .texture = texture->texture,
+            .sampler = texture->sampler
+        };
+
+        SDL_BindGPUFragmentSamplers(
+            render_pass,
+            0,
+            &material_binding,
+            1
+        );
+    }
+
+    Mat4 model = transform_to_matrix(*transform);
+
+    Mat4 normal_matrix;
+    if (!mat4_normal_matrix(model, &normal_matrix)) {
+        return;
+    }
+
+    Mat4 view_model = mat4_multiply(view, model);
+
+    VertexUniforms uniforms = {
+        .transform = mat4_multiply(projection, view_model),
+        .model = model,
+        .normal_matrix = normal_matrix
+    };
+
+    SDL_PushGPUVertexUniformData(
+        command_buffer,
+        0,
+        &uniforms,
+        sizeof(uniforms)
+    );
+
+    if (!show_wireframe) {
+        SDL_PushGPUFragmentUniformData(
+            command_buffer,
+            1,
+            material->tint,
+            sizeof(material->tint)
+        );
+    }
+
+    SDL_DrawGPUIndexedPrimitives(
+        render_pass,
+        mesh->index_count,
+        1,
+        0,
+        0,
+        0
+    );
+}
+
+bool renderer_draw(
+    Renderer *renderer,
+    SDL_Window *window,
+    const World *world,
+    Mat4 view,
+    Vec3 light_position,
+    bool show_texture,
+    bool show_wireframe,
+    const RenderObject *objects,
+    size_t object_count
+) {
+    if (!renderer || !renderer->device || !window || !world ||
+        (object_count > 0 && !objects)) {
+        SDL_Log("Cannot draw with invalid renderer arguments");
+        return false;
+    }
+
+    SDL_GPUCommandBuffer *command_buffer =
+        SDL_AcquireGPUCommandBuffer(renderer->device);
+
+    if (!command_buffer) {
+        SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_GPUTexture *swapchain_texture = NULL;
+    Uint32 swapchain_width = 0;
+    Uint32 swapchain_height = 0;
+
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(
+            command_buffer,
+            window,
+            &swapchain_texture,
+            &swapchain_width,
+            &swapchain_height)) {
+        SDL_Log("Could not acquire swapchain texture: %s", SDL_GetError());
+        SDL_CancelGPUCommandBuffer(command_buffer);
+        return false;
+    }
+
+    // A minimized window may not have a swapchain texture.
+    if (swapchain_texture) {
+        if (!renderer_ensure_depth_texture(
+                renderer,
+                swapchain_width,
+                swapchain_height)) {
+            SDL_CancelGPUCommandBuffer(command_buffer);
+            return false;
+        }
+
+        SDL_GPUColorTargetInfo color_target = {0};
+
+        color_target.texture = swapchain_texture;
+        color_target.clear_color =
+            (SDL_FColor){100.0f / 255.0f,
+                        149.0f / 255.0f,
+                        237.0f / 255.0f,
+                        1.0f};
+        color_target.load_op = SDL_GPU_LOADOP_CLEAR;
+        color_target.store_op = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPUDepthStencilTargetInfo depth_target = {0};
+
+        depth_target.texture = renderer->depth_texture;
+        depth_target.clear_depth = 1.0f;
+        depth_target.load_op = SDL_GPU_LOADOP_CLEAR;
+        depth_target.store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depth_target.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+        depth_target.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depth_target.cycle = true;
+
+        SDL_GPURenderPass *render_pass =
+            SDL_BeginGPURenderPass(
+                command_buffer,
+                &color_target,
+                1,
+                &depth_target
+            );
+
+        if (!render_pass) {
+            SDL_Log(
+                "Could not begin GPU render pass: %s",
+                SDL_GetError()
+            );
+            SDL_CancelGPUCommandBuffer(command_buffer);
+            return false;
+        }
+
+        SDL_GPUGraphicsPipeline *active_pipeline =
+            show_wireframe
+                ? renderer->wireframe_pipeline
+                : renderer->filled_pipeline;
+
+        SDL_BindGPUGraphicsPipeline(render_pass, active_pipeline);
+
+        if (!show_wireframe) {
+            FragmentUniforms fragment_uniforms = {
+                .texture_mix = {
+                    show_texture ? 1.0f : 0.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f
+                },
+                .light_position = {
+                    light_position.x,
+                    light_position.y,
+                    light_position.z,
+                    0.0f
+                },
+                .ambient_strength = 0.45f,
+                .point_light_strength = 1.0f,
+                .falloff_distance = 7.0f
+            };
+
+            SDL_PushGPUFragmentUniformData(
+                command_buffer,
+                0,
+                &fragment_uniforms,
+                sizeof(fragment_uniforms)
+            );
+        }
+
+        float aspect =
+            (float)swapchain_width / (float)swapchain_height;
+        float vertical_fov =
+            60.0f * (3.14159265359f / 180.0f); // radians
+
+        Mat4 projection = mat4_perspective_projection(
+            vertical_fov,
+            aspect,
+            0.1f,
+            100.0f
+        );
+
+        for (size_t i = 0; i < object_count; ++i) {
+            const Transform *transform = world_get_transform_const(
+                world,
+                objects[i].entity
+            );
+
+            if (!transform) {
+                continue;
+            }
+
+            draw_render_object(
+                command_buffer,
+                render_pass,
+                &objects[i],
+                transform,
+                view,
+                projection,
+                show_wireframe
+            );
+        }
+
+        SDL_EndGPURenderPass(render_pass);
+    }
+
+    if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+        SDL_Log("Could not submit command buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    return true;
 }
