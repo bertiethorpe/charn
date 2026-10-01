@@ -3,11 +3,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "demo_assets.h"
 #include "demo_scene.h"
 #include "math3d.h"
-#include "mesh.h"
 #include "renderer.h"
-#include "texture.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -15,25 +14,7 @@ static const int height = 600;
 static SDL_Window *window = NULL;
 
 static Renderer renderer = {0};
-
-static const Uint32 checker_texture_width = 16;
-static const Uint32 checker_texture_height = 16;
-static const Uint32 checker_square_size = 4;
-static const Uint32 checker_bytes_per_pixel = 4;
-
-// ------------------------- Data --------------------------
-static Mesh cube_mesh = {0};
-static Mesh floor_mesh = {0};
-
-static Texture checker_texture = {0};
-static Material cube_material = {
-    .texture = &checker_texture,
-    .tint    = {1.0f, 1.0f, 1.0f, 1.0f}
-};
-static Material floor_material = {
-    .texture = &checker_texture,
-    .tint    = {0.85f, 0.42f, 0.32f, 1.0f}
-};
+static DemoAssets demo_assets = {0};
 
 typedef struct {
     Vec3 position;
@@ -61,129 +42,6 @@ static Mat4 camera_view_matrix(Camera camera) {
         (Vec3){0.0f, 1.0f, 0.0f}
     );
 }
-
-static const Uint16 cube_indices[] = {
-     0,  1,  2,  0,  2,  3,  // front:  -Z
-     4,  5,  6,  4,  6,  7,  // back:   +Z
-     8,  9, 10,  8, 10, 11,  // left:   -X
-    12, 13, 14, 12, 14, 15,  // right:  +X
-    16, 17, 18, 16, 18, 19,  // top:    +Y
-    20, 21, 22, 20, 22, 23   // bottom: -Y
-};
-
-static const Vertex cube_vertices[] = {
-    // Front: -Z
-    { .position = {-0.5f, -0.5f, -0.5f},
-      .normal   = { 0.0f,  0.0f, -1.0f},
-      .uv       = { 0.0f,  1.0f} }, // 0
-    { .position = {-0.5f,  0.5f, -0.5f},
-      .normal   = { 0.0f,  0.0f, -1.0f},
-      .uv       = { 0.0f,  0.0f} }, // 1
-    { .position = { 0.5f,  0.5f, -0.5f},
-      .normal   = { 0.0f,  0.0f, -1.0f},
-      .uv       = { 1.0f,  0.0f} }, // 2
-    { .position = { 0.5f, -0.5f, -0.5f},
-      .normal   = { 0.0f,  0.0f, -1.0f},
-      .uv       = { 1.0f,  1.0f} }, // 3
-
-    // Back: +Z
-    { .position = {-0.5f, -0.5f,  0.5f},
-      .normal   = { 0.0f,  0.0f,  1.0f},
-      .uv       = { 1.0f,  1.0f} }, // 4
-    { .position = { 0.5f, -0.5f,  0.5f},
-      .normal   = { 0.0f,  0.0f,  1.0f},
-      .uv       = { 0.0f,  1.0f} }, // 5
-    { .position = { 0.5f,  0.5f,  0.5f},
-      .normal   = { 0.0f,  0.0f,  1.0f},
-      .uv       = { 0.0f,  0.0f} }, // 6
-    { .position = {-0.5f,  0.5f,  0.5f},
-      .normal   = { 0.0f,  0.0f,  1.0f},
-      .uv       = { 1.0f,  0.0f} }, // 7
-
-    // Left: -X
-    { .position = {-0.5f, -0.5f,  0.5f},
-      .normal   = {-1.0f,  0.0f,  0.0f},
-      .uv       = { 0.0f,  1.0f} }, // 8
-    { .position = {-0.5f,  0.5f,  0.5f},
-      .normal   = {-1.0f,  0.0f,  0.0f},
-      .uv       = { 0.0f,  0.0f} }, // 9
-    { .position = {-0.5f,  0.5f, -0.5f},
-      .normal   = {-1.0f,  0.0f,  0.0f},
-      .uv       = { 1.0f,  0.0f} }, // 10
-    { .position = {-0.5f, -0.5f, -0.5f},
-      .normal   = {-1.0f,  0.0f,  0.0f},
-      .uv       = { 1.0f,  1.0f} }, // 11
-
-    // Right: +X
-    { .position = { 0.5f, -0.5f, -0.5f},
-      .normal   = { 1.0f,  0.0f,  0.0f},
-      .uv       = { 0.0f,  1.0f} }, // 12
-    { .position = { 0.5f,  0.5f, -0.5f},
-      .normal   = { 1.0f,  0.0f,  0.0f},
-      .uv       = { 0.0f,  0.0f} }, // 13
-    { .position = { 0.5f,  0.5f,  0.5f},
-      .normal   = { 1.0f,  0.0f,  0.0f},
-      .uv       = { 1.0f,  0.0f} }, // 14
-    { .position = { 0.5f, -0.5f,  0.5f},
-      .normal   = { 1.0f,  0.0f,  0.0f},
-      .uv       = { 1.0f,  1.0f} }, // 15
-
-    // Top: +Y
-    { .position = {-0.5f,  0.5f, -0.5f},
-      .normal   = { 0.0f,  1.0f,  0.0f},
-      .uv       = { 0.0f,  1.0f} }, // 16
-    { .position = {-0.5f,  0.5f,  0.5f},
-      .normal   = { 0.0f,  1.0f,  0.0f},
-      .uv       = { 0.0f,  0.0f} }, // 17
-    { .position = { 0.5f,  0.5f,  0.5f},
-      .normal   = { 0.0f,  1.0f,  0.0f},
-      .uv       = { 1.0f,  0.0f} }, // 18
-    { .position = { 0.5f,  0.5f, -0.5f},
-      .normal   = { 0.0f,  1.0f,  0.0f},
-      .uv       = { 1.0f,  1.0f} }, // 19
-
-    // Bottom: -Y
-    { .position = {-0.5f, -0.5f,  0.5f},
-      .normal   = { 0.0f, -1.0f,  0.0f},
-      .uv       = { 0.0f,  1.0f} }, // 20
-    { .position = {-0.5f, -0.5f, -0.5f},
-      .normal   = { 0.0f, -1.0f,  0.0f},
-      .uv       = { 0.0f,  0.0f} }, // 21
-    { .position = { 0.5f, -0.5f, -0.5f},
-      .normal   = { 0.0f, -1.0f,  0.0f},
-      .uv       = { 1.0f,  0.0f} }, // 22
-    { .position = { 0.5f, -0.5f,  0.5f},
-      .normal   = { 0.0f, -1.0f,  0.0f},
-      .uv       = { 1.0f,  1.0f} }  // 23
-};
-
-static const Uint16 floor_indices[] = {
-    0, 1, 2,
-    0, 2, 3
-};
-
-static const Vertex floor_vertices[] = {
-    {
-        .position = {-5.0f,  0.0f, -5.0f},
-        .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 0.0f,  0.0f}
-    },
-    {
-        .position = {-5.0f,  0.0f,  5.0f},
-        .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 0.0f,  5.0f}
-    },
-    {
-        .position = { 5.0f,  0.0f,  5.0f},
-        .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 5.0f,  5.0f}
-    },
-    {
-        .position = { 5.0f,  0.0f, -5.0f},
-        .normal   = { 0.0f,  1.0f,  0.0f},
-        .uv       = { 5.0f,  0.0f}
-    }
-};
 
 static bool set_mouse_capture(bool enabled) {
     if (!SDL_SetWindowRelativeMouseMode(window, enabled)) {
@@ -225,77 +83,10 @@ static bool init(void) {
         return false;
     }
 
-    const Uint32 checker_data_size =
-        checker_texture_width *
-        checker_texture_height *
-        checker_bytes_per_pixel;
-    
-    Uint8 checker_pixels[checker_data_size];
-
-    for (Uint32 y = 0; y < checker_texture_height; ++y) {
-        for (Uint32 x = 0; x < checker_texture_width; ++x) {
-            bool bright_square =
-                ((x / checker_square_size) +
-                 (y / checker_square_size)) % 2u == 0u;
-
-            Uint8 color = bright_square ? 196 : 142;
-
-            Uint32 pixel_offset =
-                (y * checker_texture_width + x) *
-                checker_bytes_per_pixel;
-            
-            checker_pixels[pixel_offset + 0] = color;
-            checker_pixels[pixel_offset + 1] = color;
-            checker_pixels[pixel_offset + 2] = color;
-            checker_pixels[pixel_offset + 3] = 255;
-        }
-    }
-
-    if (!texture_create_rgba8(
-            renderer.device,
-            &checker_texture,
-            checker_texture_width,
-            checker_texture_height,
-            checker_pixels)) {
+    if (!demo_assets_init(&demo_assets, renderer.device)) {
         shutdown();
         return false;
     }
-
-    const Uint32 cube_vertex_count =
-        (Uint32)(sizeof(cube_vertices) / sizeof(cube_vertices[0]));
-
-    const Uint32 cube_index_count =
-        (Uint32)(sizeof(cube_indices) / sizeof(cube_indices[0]));
-
-    if (!mesh_create(
-            renderer.device,
-            &cube_mesh,
-            cube_vertices,
-            cube_vertex_count,
-            cube_indices,
-            cube_index_count)) {
-        shutdown();
-        return false;
-    }
-
-    const Uint32 floor_vertex_count =
-        (Uint32)(sizeof(floor_vertices) / sizeof(floor_vertices[0]));
-
-    const Uint32 floor_index_count =
-        (Uint32)(sizeof(floor_indices) / sizeof(floor_indices[0]));
-
-    if (!mesh_create(
-            renderer.device,
-            &floor_mesh,
-            floor_vertices,
-            floor_vertex_count,
-            floor_indices,
-            floor_index_count)) {
-        shutdown();
-        return false;
-    }
-
-    SDL_Log("Created cube and floor meshes and uploaded checker texture");
 
     SDL_SetWindowPosition(window, 50, 100);
 
@@ -309,13 +100,7 @@ static bool init(void) {
 
 static void shutdown(void) {
     if (renderer.device) {
-        mesh_destroy(renderer.device, &cube_mesh);
-        mesh_destroy(renderer.device, &floor_mesh);
-
-        texture_destroy(
-            renderer.device,
-            &checker_texture
-        );
+        demo_assets_destroy(&demo_assets, renderer.device);
     }
 
     renderer_destroy(&renderer, window);
@@ -426,10 +211,10 @@ static void run(void) {
     DemoScene scene;
     if (!demo_scene_init(
             &scene,
-            &cube_mesh,
-            &floor_mesh,
-            &cube_material,
-            &floor_material)) {
+            &demo_assets.cube_mesh,
+            &demo_assets.floor_mesh,
+            &demo_assets.cube_material,
+            &demo_assets.floor_material)) {
         return;
     }
 
