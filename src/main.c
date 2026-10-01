@@ -1,15 +1,13 @@
 #include <stdbool.h>
-#include <stddef.h>
 #include <math.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "demo_scene.h"
 #include "math3d.h"
 #include "mesh.h"
 #include "renderer.h"
 #include "texture.h"
-#include "transform.h"
-#include "world.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -415,8 +413,6 @@ static void run(void) {
     bool show_texture = true;
     bool show_wireframe = false;
     bool light_follows_camera = false;
-    float angle_x = 0.0f;
-    float angle_y = 0.0f;
     Camera camera = {
         .position = {
             .x = 0.0f,
@@ -427,89 +423,16 @@ static void run(void) {
         .pitch = 0.0f
     };
 
-    World world;
-    world_init(&world);
-
-    EntityId rotating_cube = world_create_entity(&world);
-    EntityId static_cube = world_create_entity(&world);
-    EntityId floor = world_create_entity(&world);
-    EntityId back_wall = world_create_entity(&world);
-
-    Transform *rotating_cube_transform =
-        world_get_transform(&world, rotating_cube);
-
-    Transform *static_cube_transform =
-        world_get_transform(&world, static_cube);
-
-    Transform *floor_transform =
-        world_get_transform(&world, floor);
-
-    Transform *back_wall_transform =
-        world_get_transform(&world, back_wall);
-
-    if (
-        !rotating_cube_transform ||
-        !static_cube_transform ||
-        !floor_transform ||
-        !back_wall_transform
-    ) {
-        SDL_Log("Could not create scene entities");
+    DemoScene scene;
+    if (!demo_scene_init(
+            &scene,
+            &cube_mesh,
+            &floor_mesh,
+            &cube_material,
+            &floor_material)) {
         return;
     }
 
-    rotating_cube_transform->position = (Vec3){
-        .x = 0.0f,
-        .y = 1.0f,
-        .z = 0.0f
-    };
-
-    static_cube_transform->position = (Vec3){
-        .x = 1.5f,
-        .y = 0.5f,
-        .z = 1.0f
-    };
-
-    floor_transform->position = (Vec3){
-        .x = 0.0f,
-        .y = 0.0f,
-        .z = 0.0f
-    };
-
-    back_wall_transform->position = (Vec3){
-        .x = 0.0f,
-        .y = 2.5f,
-        .z = 5.0f
-    };
-
-    back_wall_transform->rotation.x = -1.5707963f;
-    back_wall_transform->scale.z = 0.5f;
-
-    RenderObject objects[] = {
-        {
-            .entity = rotating_cube,
-            .mesh = &cube_mesh,
-            .material = &cube_material
-        },
-        {
-            .entity = static_cube,
-            .mesh = &cube_mesh,
-            .material = &cube_material
-        },
-        {
-            .entity = floor,
-            .mesh = &floor_mesh,
-            .material = &floor_material
-        },
-        {
-            .entity = back_wall,
-            .mesh = &floor_mesh,
-            .material = &floor_material
-        }
-    };
-
-    const size_t object_count = sizeof(objects) / sizeof(objects[0]);
-
-    const float two_pi = 6.28318530718f;
     const float camera_speed = 4.0f;
 
     Uint64 last = SDL_GetPerformanceCounter();
@@ -535,8 +458,7 @@ static void run(void) {
         const bool *keyboard = SDL_GetKeyboardState(NULL);
 
         if (dt <= 0.1f) {
-            angle_x += 1.2f * dt;
-            angle_y += 2.0f * dt;
+            demo_scene_update(&scene, dt);
 
             Vec3 camera_forward = camera_forward_direction(camera);
 
@@ -595,17 +517,6 @@ static void run(void) {
             }
         }
 
-        if (angle_x >= two_pi) {
-            angle_x -= two_pi;
-        }
-
-        if (angle_y >= two_pi) {
-            angle_y -= two_pi;
-        }
-
-        rotating_cube_transform->rotation.x = angle_x;
-        rotating_cube_transform->rotation.y = angle_y;
-
         Vec3 light_position = light_follows_camera
             ? camera.position
             : fixed_light_position;
@@ -613,13 +524,13 @@ static void run(void) {
         if (!renderer_draw(
                 &renderer,
                 window,
-                &world,
+                &scene.world,
                 camera_view_matrix(camera),
                 light_position,
                 show_texture,
                 show_wireframe,
-                objects,
-                object_count)) {
+                scene.objects,
+                scene.object_count)) {
             quit = true;
         } else {
             fps_elapsed += dt;
