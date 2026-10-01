@@ -22,6 +22,13 @@ typedef struct {
 } RenderObject;
 
 typedef struct {
+    Vec3 light_position;
+    float ambient_strength;
+    float point_light_strength;
+    float falloff_distance;
+} SceneLighting;
+
+typedef struct {
     SDL_GPUDevice *device;
     bool window_claimed;
 
@@ -50,7 +57,7 @@ bool renderer_draw(
     SDL_Window *window,
     const World *world,
     Mat4 view,
-    Vec3 light_position,
+    SceneLighting lighting,
     bool show_texture,
     bool show_wireframe,
     const RenderObject *objects,

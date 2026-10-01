@@ -56,7 +56,6 @@ static bool set_mouse_capture(bool enabled) {
     return true;
 }
 
-// -------------------- Init / Shutdown --------------------
 static void shutdown(void);
 
 static bool init(void) {
@@ -111,7 +110,6 @@ static void shutdown(void) {
     SDL_Quit();
 }
 
-// -------------------- Input --------------------
 static void process_input(
     bool *quit,
     Camera *camera,
@@ -218,14 +216,12 @@ static void run(void) {
         return;
     }
 
-    const float camera_speed = 4.0f;
+    const float camera_speed = 5.0f;
 
     Uint64 last = SDL_GetPerformanceCounter();
     Uint64 frequency = SDL_GetPerformanceFrequency();
     float fps_elapsed = 0.0f;
     Uint32 fps_frame_count = 0;
-
-    const Vec3 fixed_light_position = {-1.25f, 2.25f, -1.25f};
 
     while (!quit) {
         Uint64 now = SDL_GetPerformanceCounter();
@@ -302,16 +298,17 @@ static void run(void) {
             }
         }
 
-        Vec3 light_position = light_follows_camera
-            ? camera.position
-            : fixed_light_position;
+        SceneLighting lighting = scene.lighting;
+        if (light_follows_camera) {
+            lighting.light_position = camera.position;
+        }
 
         if (!renderer_draw(
                 &renderer,
                 window,
                 &scene.world,
                 camera_view_matrix(camera),
-                light_position,
+                lighting,
                 show_texture,
                 show_wireframe,
                 scene.objects,

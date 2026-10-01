@@ -15,6 +15,12 @@ bool demo_scene_init(
 
     *scene = (DemoScene){0};
     world_init(&scene->world);
+    scene->lighting = (SceneLighting){
+        .light_position = {-1.25f, 2.25f, -1.25f},
+        .ambient_strength = 0.25f,
+        .point_light_strength = 1.0f,
+        .falloff_distance = 7.0f
+    };
 
     scene->rotating_cube = world_create_entity(&scene->world);
     EntityId static_cube = world_create_entity(&scene->world);

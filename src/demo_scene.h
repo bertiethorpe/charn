@@ -8,6 +8,7 @@ typedef struct {
     EntityId rotating_cube;
     RenderObject objects[4];
     size_t object_count;
+    SceneLighting lighting;
     float angle_x;
     float angle_y;
 } DemoScene;

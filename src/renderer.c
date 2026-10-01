@@ -384,7 +384,7 @@ bool renderer_draw(
     SDL_Window *window,
     const World *world,
     Mat4 view,
-    Vec3 light_position,
+    SceneLighting lighting,
     bool show_texture,
     bool show_wireframe,
     const RenderObject *objects,
@@ -425,7 +425,12 @@ bool renderer_draw(
                 renderer,
                 swapchain_width,
                 swapchain_height)) {
-            SDL_CancelGPUCommandBuffer(command_buffer);
+            if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+                SDL_Log(
+                    "Could not submit failed frame: %s",
+                    SDL_GetError()
+                );
+            }
             return false;
         }
 
@@ -463,7 +468,12 @@ bool renderer_draw(
                 "Could not begin GPU render pass: %s",
                 SDL_GetError()
             );
-            SDL_CancelGPUCommandBuffer(command_buffer);
+            if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+                SDL_Log(
+                    "Could not submit failed frame: %s",
+                    SDL_GetError()
+                );
+            }
             return false;
         }
 
@@ -483,14 +493,14 @@ bool renderer_draw(
                     0.0f
                 },
                 .light_position = {
-                    light_position.x,
-                    light_position.y,
-                    light_position.z,
+                    lighting.light_position.x,
+                    lighting.light_position.y,
+                    lighting.light_position.z,
                     0.0f
                 },
-                .ambient_strength = 0.45f,
-                .point_light_strength = 1.0f,
-                .falloff_distance = 7.0f
+                .ambient_strength = lighting.ambient_strength,
+                .point_light_strength = lighting.point_light_strength,
+                .falloff_distance = lighting.falloff_distance
             };
 
             SDL_PushGPUFragmentUniformData(
