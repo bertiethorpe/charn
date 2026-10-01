@@ -14,16 +14,9 @@ typedef struct {
 } EntityId;
 
 typedef struct {
-    uint32_t mesh_id;
-    uint32_t material_id;
-} MeshRenderer;
-
-typedef struct {
     bool alive[WORLD_MAX_ENTITIES];
     uint32_t generations[WORLD_MAX_ENTITIES];
     Transform transforms[WORLD_MAX_ENTITIES];
-    bool has_mesh_renderer[WORLD_MAX_ENTITIES];
-    MeshRenderer mesh_renderers[WORLD_MAX_ENTITIES];
 } World;
 
 void world_init(World *world);
@@ -46,17 +39,6 @@ Transform *world_get_transform(
 );
 
 const Transform *world_get_transform_const(
-    const World *world,
-    EntityId entity
-);
-
-bool world_set_mesh_renderer(
-    World *world,
-    EntityId entity,
-    MeshRenderer mesh_renderer
-);
-
-const MeshRenderer *world_get_mesh_renderer_const(
     const World *world,
     EntityId entity
 );

@@ -18,7 +18,6 @@ EntityId world_create_entity(World *world) {
 
         world->alive[index] = true;
         world->transforms[index] = transform_identity();
-        world->has_mesh_renderer[index] = false;
 
         return (EntityId){
             .index      = index,
@@ -51,7 +50,6 @@ bool world_destroy_entity(
     }
 
     world->alive[entity.index] = false;
-    world->has_mesh_renderer[entity.index] = false;
     ++world->generations[entity.index];
 
     if (world->generations[entity.index] == 0) {
@@ -81,30 +79,4 @@ const Transform *world_get_transform_const(
     }
 
     return &world->transforms[entity.index];
-}
-
-bool world_set_mesh_renderer(
-    World *world,
-    EntityId entity,
-    MeshRenderer mesh_renderer
-) {
-    if (!world_is_alive(world, entity)) {
-        return false;
-    }
-
-    world->mesh_renderers[entity.index] = mesh_renderer;
-    world->has_mesh_renderer[entity.index] = true;
-    return true;
-}
-
-const MeshRenderer *world_get_mesh_renderer_const(
-    const World *world,
-    EntityId entity
-) {
-    if (!world_is_alive(world, entity) ||
-        !world->has_mesh_renderer[entity.index]) {
-        return NULL;
-    }
-
-    return &world->mesh_renderers[entity.index];
 }
