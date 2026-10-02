@@ -13,21 +13,30 @@ SDL_GPUShader *shader_load_msl(
         return NULL;
     }
 
-    size_t shader_code_size = 0;
+    const char *asset_root = SDL_GetBasePath();
 
-    Uint8 *shader_code = SDL_LoadFile(
-        path,
-        &shader_code_size
-    );
-
-    if (!shader_code) {
-        SDL_Log(
-            "Could not load shader '%s': %s",
-            path,
-            SDL_GetError()
-        );
+    if (!asset_root) {
+        SDL_Log("Could not find asset directory: %s", SDL_GetError());
         return NULL;
     }
+
+    char *full_path = NULL;
+    if (SDL_asprintf(&full_path, "%s%s", asset_root, path) < 0) {
+        SDL_Log("Could not allocate path for shader '%s'", path);
+        return NULL;
+    }
+
+    size_t shader_code_size = 0;
+    Uint8 *shader_code = SDL_LoadFile(full_path, &shader_code_size);
+
+    if (!shader_code) {
+        SDL_Log("Could not load shader '%s': %s",
+                full_path, SDL_GetError());
+        SDL_free(full_path);
+        return NULL;
+    }
+
+    SDL_free(full_path);
 
     SDL_GPUShaderCreateInfo shader_info = {
         .code                = shader_code,

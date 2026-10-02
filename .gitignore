@@ -1,6 +1,7 @@
 # Build output
 /test
 /obj/
+/build/
 
 # Local editor and macOS files
 /.vscode/

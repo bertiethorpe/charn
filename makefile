@@ -2,7 +2,12 @@
 CC = clang
 
 # Output binary
-TARGET = test
+TARGET = build/test
+
+SHADER_SOURCES = shaders/triangle.vert.msl shaders/triangle.frag.msl \
+				 shaders/wireframe.frag.msl
+
+SHADER_OUTPUTS = $(patsubst shaders/%,build/shaders/%,$(SHADER_SOURCES))
 
 # Source files
 SRC = src/main.c src/demo_assets.c src/demo_scene.c src/math3d.c \
@@ -18,17 +23,22 @@ CFLAGS = -Wall -Wextra -std=c99 $(shell pkg-config --cflags sdl3)
 LDFLAGS = $(shell pkg-config --libs sdl3)
 
 # Build target
-all: $(TARGET)
+all: $(TARGET) $(SHADER_OUTPUTS)
 
 $(TARGET): $(SRC) $(HEADERS)
+	mkdir -p build
 	$(CC) $(SRC) -o $(TARGET) $(CFLAGS) $(LDFLAGS)
+
+build/shaders/%: shaders/%
+	mkdir -p build/shaders
+	cp $< $@
 
 # Clean build files
 clean:
-	rm -f $(TARGET)
+	rm -rf build
 
 # Run the program
-run: $(TARGET)
+run: all
 	./$(TARGET)
 
 .PHONY: all clean run
