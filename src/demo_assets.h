@@ -6,6 +6,7 @@
 typedef struct {
     Mesh cube_mesh;
     Mesh floor_mesh;
+    Mesh suzanne_mesh;
     Texture checker_texture;
     Material cube_material;
     Material floor_material;

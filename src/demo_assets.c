@@ -1,4 +1,5 @@
 #include "demo_assets.h"
+#include "gltf_loader.h"
 
 static const Uint32 checker_texture_width = 16;
 static const Uint32 checker_texture_height = 16;
@@ -135,6 +136,7 @@ void demo_assets_destroy(DemoAssets *assets, SDL_GPUDevice *device) {
 
     mesh_destroy(device, &assets->cube_mesh);
     mesh_destroy(device, &assets->floor_mesh);
+    mesh_destroy(device, &assets->suzanne_mesh);
     texture_destroy(device, &assets->checker_texture);
     *assets = (DemoAssets){0};
 }
@@ -214,6 +216,13 @@ bool demo_assets_init(DemoAssets *assets, SDL_GPUDevice *device) {
         goto fail;
     }
 
+    if (!gltf_load_mesh(
+            device,
+            &assets->suzanne_mesh,
+            "models/Suzanne.gltf")) {
+        goto fail;
+    }
+
     assets->cube_material = (Material){
         .texture = &assets->checker_texture,
         .tint = {1.0f, 1.0f, 1.0f, 1.0f}
@@ -223,7 +232,7 @@ bool demo_assets_init(DemoAssets *assets, SDL_GPUDevice *device) {
         .tint = {0.85f, 0.42f, 0.32f, 1.0f}
     };
 
-    SDL_Log("Created cube and floor meshes and uploaded checker texture");
+    SDL_Log("Created cube, floor, and Suzanne meshes and uploaded checker texture");
     return true;
 
 fail:

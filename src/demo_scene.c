@@ -4,10 +4,11 @@ bool demo_scene_init(
     DemoScene *scene,
     const Mesh *cube_mesh,
     const Mesh *floor_mesh,
+    const Mesh *suzanne_mesh,
     const Material *cube_material,
     const Material *floor_material
 ) {
-    if (!scene || !cube_mesh || !floor_mesh ||
+    if (!scene || !cube_mesh || !floor_mesh || !suzanne_mesh ||
         !cube_material || !floor_material) {
         SDL_Log("Could not initialise demo scene");
         return false;
@@ -26,6 +27,7 @@ bool demo_scene_init(
     EntityId static_cube = world_create_entity(&scene->world);
     EntityId floor = world_create_entity(&scene->world);
     EntityId back_wall = world_create_entity(&scene->world);
+    EntityId suzanne = world_create_entity(&scene->world);
 
     Transform *rotating_cube_transform =
         world_get_transform(&scene->world, scene->rotating_cube);
@@ -35,8 +37,10 @@ bool demo_scene_init(
         world_get_transform(&scene->world, floor);
     Transform *back_wall_transform =
         world_get_transform(&scene->world, back_wall);
+    Transform *suzanne_transform =
+        world_get_transform(&scene->world, suzanne);
 
-    if (!rotating_cube_transform || !static_cube_transform ||
+    if (!rotating_cube_transform || !static_cube_transform || !suzanne_transform ||
         !floor_transform || !back_wall_transform) {
         SDL_Log("Could not create scene entities");
         return false;
@@ -45,6 +49,8 @@ bool demo_scene_init(
     rotating_cube_transform->position = (Vec3){0.0f, 1.0f, 0.0f};
     static_cube_transform->position = (Vec3){1.5f, 0.5f, 1.0f};
     floor_transform->position = (Vec3){0.0f, 0.0f, 0.0f};
+    suzanne_transform->position = (Vec3){-2.2f, 1.0f, 1.5f};
+    suzanne_transform->rotation.y = 3.1415927f;
 
     back_wall_transform->position = (Vec3){0.0f, 2.5f, 5.0f};
     back_wall_transform->rotation.x = -1.5707963f;
@@ -69,6 +75,11 @@ bool demo_scene_init(
         .entity = back_wall,
         .mesh = floor_mesh,
         .material = floor_material
+    };
+    scene->objects[4] = (RenderObject){
+        .entity = suzanne,
+        .mesh = suzanne_mesh,
+        .material = cube_material
     };
 
     scene->object_count =

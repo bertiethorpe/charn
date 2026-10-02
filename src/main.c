@@ -7,7 +7,6 @@
 #include "demo_scene.h"
 #include "math3d.h"
 #include "renderer.h"
-#include "gltf_loader.h"
 
 static const int width = 800;
 static const int height = 600;
@@ -84,11 +83,6 @@ static bool init(void) {
     }
 
     if (!demo_assets_init(&demo_assets, renderer.device)) {
-        shutdown();
-        return false;
-    }
-
-    if (!gltf_inspect("models/Suzanne.gltf")) {
         shutdown();
         return false;
     }
@@ -217,6 +211,7 @@ static bool run(void) {
             &scene,
             &demo_assets.cube_mesh,
             &demo_assets.floor_mesh,
+            &demo_assets.suzanne_mesh,
             &demo_assets.cube_material,
             &demo_assets.floor_material)) {
         return false;

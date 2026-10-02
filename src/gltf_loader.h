@@ -3,6 +3,12 @@
 
 #include <stdbool.h>
 
-bool gltf_inspect(const char *relative_path);
+#include "mesh.h"
+
+bool gltf_load_mesh(
+    SDL_GPUDevice *device,
+    Mesh *mesh,
+    const char *relative_path
+);
 
 #endif
