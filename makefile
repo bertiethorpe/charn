@@ -16,11 +16,11 @@ SHADER_SOURCES = shaders/triangle.vert.msl shaders/triangle.frag.msl \
 SHADER_OUTPUTS = $(patsubst shaders/%,build/shaders/%,$(SHADER_SOURCES))
 
 # Source files
-SRC = src/main.c src/demo_assets.c src/demo_scene.c src/math3d.c \
+SRC = src/main.c src/game.c src/demo_assets.c src/demo_scene.c src/math3d.c \
 	  src/mesh.c src/texture.c src/shader.c src/pipeline.c src/renderer.c \
 	  src/transform.c src/world.c src/gltf_loader.c
 
-HEADERS = src/demo_assets.h src/demo_scene.h src/math3d.h src/mesh.h \
+HEADERS = src/game.h src/demo_assets.h src/demo_scene.h src/math3d.h src/mesh.h \
 		  src/texture.h src/shader.h src/pipeline.h src/renderer.h \
 		  src/transform.h src/world.h src/gltf_loader.h third_party/cgltf.h
 
