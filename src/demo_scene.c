@@ -6,10 +6,11 @@ bool demo_scene_init(
     const Mesh *floor_mesh,
     const Mesh *suzanne_mesh,
     const Material *cube_material,
-    const Material *floor_material
+    const Material *floor_material,
+    const Material *suzanne_material
 ) {
     if (!scene || !cube_mesh || !floor_mesh || !suzanne_mesh ||
-        !cube_material || !floor_material) {
+        !cube_material || !floor_material || !suzanne_material) {
         SDL_Log("Could not initialise demo scene");
         return false;
     }
@@ -79,7 +80,7 @@ bool demo_scene_init(
     scene->objects[4] = (RenderObject){
         .entity = suzanne,
         .mesh = suzanne_mesh,
-        .material = cube_material
+        .material = suzanne_material
     };
 
     scene->object_count =

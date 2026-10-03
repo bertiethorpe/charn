@@ -9,20 +9,9 @@
 bool gltf_load_mesh(
     SDL_GPUDevice *device,
     Mesh *mesh,
-    const char *relative_path
+    const char *path
 ) {
-    if (!device || !mesh || !relative_path) {
-        return false;
-    }
-
-    const char *base_path = SDL_GetBasePath();
-    if (!base_path) {
-        SDL_Log("Could not find asset directory: %s", SDL_GetError());
-        return false;
-    }
-
-    char *path = NULL;
-    if (SDL_asprintf(&path, "%s%s", base_path, relative_path) < 0) {
+    if (!device || !mesh || !path) {
         return false;
     }
 
@@ -143,13 +132,12 @@ bool gltf_load_mesh(
 
     if (success) {
         SDL_Log("Uploaded mesh '%s': %zu vertices, %zu indices",
-                relative_path, (size_t)vertex_count, (size_t)index_count);
+                path, (size_t)vertex_count, (size_t)index_count);
     }
 
 cleanup:
     SDL_free(vertices);
     SDL_free(indices);
     cgltf_free(data);
-    SDL_free(path);
     return success;
 }

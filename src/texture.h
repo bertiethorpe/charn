@@ -23,4 +23,10 @@ bool texture_create_rgba8(
     const Uint8 *pixels
 );
 
+bool texture_load_image(
+    SDL_GPUDevice *device,
+    Texture *texture,
+    const char *path
+);
+
 #endif

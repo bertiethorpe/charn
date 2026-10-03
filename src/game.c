@@ -36,8 +36,13 @@ static bool set_mouse_capture(SDL_Window *window, bool enabled) {
     return true;
 }
 
-bool game_init(Game *game, SDL_Window *window, SDL_GPUDevice *device) {
-    if (!game || !window || !device) {
+bool game_init(
+    Game *game,
+    SDL_Window *window,
+    SDL_GPUDevice *device,
+    const char *asset_root
+) {
+    if (!game || !window || !device || !asset_root) {
         SDL_Log("Cannot initialise game with invalid arguments");
         return false;
     }
@@ -46,7 +51,7 @@ bool game_init(Game *game, SDL_Window *window, SDL_GPUDevice *device) {
     game->camera_position = (Vec3){0.0f, 1.2f, -4.0f};
     game->show_texture = true;
 
-    if (!demo_assets_init(&game->assets, device)) {
+    if (!demo_assets_init(&game->assets, device, asset_root)) {
         return false;
     }
 
@@ -56,7 +61,8 @@ bool game_init(Game *game, SDL_Window *window, SDL_GPUDevice *device) {
             &game->assets.floor_mesh,
             &game->assets.suzanne_mesh,
             &game->assets.cube_material,
-            &game->assets.floor_material)) {
+            &game->assets.floor_material,
+            &game->assets.suzanne_material)) {
         goto fail;
     }
 

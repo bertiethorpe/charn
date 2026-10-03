@@ -138,11 +138,16 @@ void demo_assets_destroy(DemoAssets *assets, SDL_GPUDevice *device) {
     mesh_destroy(device, &assets->floor_mesh);
     mesh_destroy(device, &assets->suzanne_mesh);
     texture_destroy(device, &assets->checker_texture);
+    texture_destroy(device, &assets->suzanne_texture);
     *assets = (DemoAssets){0};
 }
 
-bool demo_assets_init(DemoAssets *assets, SDL_GPUDevice *device) {
-    if (!assets || !device) {
+bool demo_assets_init(
+    DemoAssets *assets,
+    SDL_GPUDevice *device,
+    const char *asset_root
+) {
+    if (!assets || !device || !asset_root) {
         SDL_Log("Could not initialise demo assets");
         return false;
     }
@@ -216,10 +221,38 @@ bool demo_assets_init(DemoAssets *assets, SDL_GPUDevice *device) {
         goto fail;
     }
 
-    if (!gltf_load_mesh(
-            device,
-            &assets->suzanne_mesh,
-            "models/Suzanne.gltf")) {
+    char *suzanne_path = NULL;
+    if (SDL_asprintf(&suzanne_path, "%smodels/Suzanne.gltf", asset_root) < 0) {
+        SDL_Log("Could not create Suzanne asset path: %s", SDL_GetError());
+        goto fail;
+    }
+
+    bool suzanne_loaded = gltf_load_mesh(
+        device,
+        &assets->suzanne_mesh,
+        suzanne_path
+    );
+    SDL_free(suzanne_path);
+    if (!suzanne_loaded) {
+        goto fail;
+    }
+
+    char *image_path = NULL;
+    if (SDL_asprintf(
+            &image_path,
+            "%smodels/Suzanne_BaseColor.png",
+            asset_root
+        ) < 0) {
+        SDL_Log("Could not create Suzanne image path: %s", SDL_GetError());
+        goto fail;
+    }
+
+    bool image_loaded = texture_load_image(
+        device, &assets->suzanne_texture, image_path
+    );
+    SDL_free(image_path);
+
+    if (!image_loaded) {
         goto fail;
     }
 
@@ -230,6 +263,10 @@ bool demo_assets_init(DemoAssets *assets, SDL_GPUDevice *device) {
     assets->floor_material = (Material){
         .texture = &assets->checker_texture,
         .tint = {0.85f, 0.42f, 0.32f, 1.0f}
+    };
+    assets->suzanne_material = (Material){
+        .texture = &assets->suzanne_texture,
+        .tint = {1.0f, 1.0f, 1.0f, 1.0f}
     };
 
     SDL_Log("Created cube, floor, and Suzanne meshes and uploaded checker texture");

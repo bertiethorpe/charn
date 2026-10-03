@@ -19,7 +19,8 @@ bool demo_scene_init(
     const Mesh *floor_mesh,
     const Mesh *suzanne_mesh,
     const Material *cube_material,
-    const Material *floor_material
+    const Material *floor_material,
+    const Material *suzanne_material
 );
 
 void demo_scene_update(DemoScene *scene, float dt);

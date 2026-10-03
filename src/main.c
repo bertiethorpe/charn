@@ -41,7 +41,14 @@ static bool init(void) {
 
     SDL_SetWindowPosition(window, 50, 100);
 
-    if (!game_init(&game, window, renderer.device)) {
+    const char *asset_root = SDL_GetBasePath();
+    if (!asset_root) {
+        SDL_Log("Could not find asset directory: %s", SDL_GetError());
+        shutdown();
+        return false;
+    }
+
+    if (!game_init(&game, window, renderer.device, asset_root)) {
         shutdown();
         return false;
     }

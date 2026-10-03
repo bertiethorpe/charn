@@ -8,7 +8,7 @@
 bool gltf_load_mesh(
     SDL_GPUDevice *device,
     Mesh *mesh,
-    const char *relative_path
+    const char *path
 );
 
 #endif

@@ -1,3 +1,6 @@
+#include <SDL3_image/SDL_image.h>
+#include <stdint.h>
+
 #include "texture.h"
 
 void texture_destroy(
@@ -227,4 +230,73 @@ bool texture_create_rgba8(
     );
 
     return true;
+}
+
+bool texture_load_image(
+    SDL_GPUDevice *device,
+    Texture *texture,
+    const char *path
+) {
+    if (!device || !texture || !path) {
+        return false;
+    }
+
+    SDL_Surface *loaded = IMG_Load(path);
+    if (!loaded) {
+        SDL_Log("Could not load image %s: %s", path, SDL_GetError());
+        return false;
+    }
+
+    SDL_Surface *rgba = SDL_ConvertSurface(
+        loaded, SDL_PIXELFORMAT_RGBA32
+    );
+    SDL_DestroySurface(loaded);
+    if (!rgba) {
+        SDL_Log("Could not convert image %s: %s", path, SDL_GetError());
+        return false;
+    }
+
+    bool success = false;
+    if (rgba->w <= 0 || rgba->h <= 0 ||
+        (Uint64)rgba->w * (Uint64)rgba->h * 4 > UINT32_MAX ||
+        rgba->pitch <= 0 ||
+        (size_t)rgba->pitch < (size_t)rgba->w * 4) {
+        SDL_Log("Unsupported image dimensions: %s", path);
+        goto cleanup;
+    }
+
+    size_t row_bytes = (size_t)rgba->w * 4;
+    size_t data_size = row_bytes * (size_t)rgba->h;
+    Uint8 *pixels = SDL_malloc(data_size);
+
+    if (!pixels) {
+        SDL_Log("Could not allocate pixels for %s", path);
+        goto cleanup;
+    }
+
+    if (!SDL_LockSurface(rgba)) {
+        SDL_Log("Could not access pixels for %s: %s", path, SDL_GetError());
+        SDL_free(pixels);
+        goto cleanup;
+    }
+
+    for (int y = 0; y < rgba->h; ++y) {
+        SDL_memcpy(
+            pixels + (size_t)y * row_bytes,
+            (const Uint8 *)rgba->pixels + (size_t)y * rgba->pitch,
+            row_bytes
+        );
+    }
+
+    SDL_UnlockSurface(rgba);
+
+    success = texture_create_rgba8(
+        device, texture, (Uint32)rgba->w, (Uint32)rgba->h, pixels
+    );
+
+    SDL_free(pixels);
+
+cleanup:
+    SDL_DestroySurface(rgba);
+    return success;
 }

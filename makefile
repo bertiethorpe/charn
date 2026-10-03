@@ -25,8 +25,8 @@ HEADERS = src/game.h src/demo_assets.h src/demo_scene.h src/math3d.h src/mesh.h 
 		  src/transform.h src/world.h src/gltf_loader.h third_party/cgltf.h
 
 # Compiler & linker flags from pkg-config
-CFLAGS = -Wall -Wextra -std=c99 -Ithird_party $(shell pkg-config --cflags sdl3)
-LDFLAGS = $(shell pkg-config --libs sdl3)
+CFLAGS = -Wall -Wextra -std=c99 -Ithird_party $(shell pkg-config --cflags sdl3 sdl3-image)
+LDFLAGS = $(shell pkg-config --libs sdl3 sdl3-image)
 
 # Build target
 all: $(TARGET) $(SHADER_OUTPUTS) $(MODEL_OUTPUTS)
