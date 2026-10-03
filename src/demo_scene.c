@@ -19,8 +19,8 @@ bool demo_scene_init(
     world_init(&scene->world);
     scene->lighting = (SceneLighting){
         .light_position = {-1.25f, 2.25f, -1.25f},
-        .ambient_strength = 0.25f,
-        .point_light_strength = 1.0f,
+        .ambient_strength = 0.12f,
+        .point_light_strength = 0.95f,
         .falloff_distance = 7.0f
     };
 

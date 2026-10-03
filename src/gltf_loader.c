@@ -6,12 +6,62 @@
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
 
+static char *gltf_external_image_path(const char *gltf_path, const char *uri) {
+    if (uri && SDL_strncmp(uri, "data:", 5) == 0) {
+        SDL_Log("Embedded image data URIs are not supported in %s", gltf_path);
+        return NULL;
+    }
+
+    if (!uri || !*uri || uri[0] == '/' || uri[0] == '\\' ||
+        SDL_strchr(uri, ':') || SDL_strchr(uri, '?') ||
+        SDL_strchr(uri, '#')) {
+        SDL_Log("Unsupported glTF image URI in %s", gltf_path);
+        return NULL;
+    }
+
+    const char *separator = SDL_strrchr(gltf_path, '/');
+    const char *backslash = SDL_strrchr(gltf_path, '\\');
+    if (backslash && (!separator || backslash > separator)) {
+        separator = backslash;
+    }
+
+    size_t directory_length = separator
+        ? (size_t)(separator - gltf_path + 1)
+        : 0;
+    size_t uri_length = SDL_strlen(uri);
+    if (uri_length >= SIZE_MAX - directory_length) {
+        SDL_Log("glTF image path is too long in %s", gltf_path);
+        return NULL;
+    }
+
+    char *image_path = SDL_malloc(directory_length + uri_length + 1);
+    if (!image_path) {
+        SDL_Log("Could not allocate image path for %s", gltf_path);
+        return NULL;
+    }
+
+    SDL_memcpy(image_path, gltf_path, directory_length);
+    SDL_memcpy(image_path + directory_length, uri, uri_length + 1);
+
+    cgltf_size decoded_length = cgltf_decode_uri(image_path + directory_length);
+    if (SDL_strlen(image_path + directory_length) != decoded_length) {
+        SDL_Log("Unsupported glTF image URI in %s", gltf_path);
+        SDL_free(image_path);
+        return NULL;
+    }
+
+    return image_path;
+}
+
 bool gltf_load_mesh(
     SDL_GPUDevice *device,
     Mesh *mesh,
+    Texture *base_color_texture,
+    float base_color_factor[4],
     const char *path
 ) {
-    if (!device || !mesh || !path) {
+    if (!device || !mesh || !base_color_texture ||
+        !base_color_factor || !path) {
         return false;
     }
 
@@ -19,6 +69,9 @@ bool gltf_load_mesh(
     cgltf_data *data = NULL;
     Vertex *vertices = NULL;
     Uint16 *indices = NULL;
+    char *image_path = NULL;
+    Mesh loaded_mesh = {0};
+    Texture loaded_texture = {0};
     bool success = false;
 
     cgltf_result result = cgltf_parse_file(&options, path, &data);
@@ -44,6 +97,37 @@ bool gltf_load_mesh(
     if (primitive->type != cgltf_primitive_type_triangles ||
         !primitive->indices) {
         SDL_Log("Expected indexed triangles in %s", path);
+        goto cleanup;
+    }
+
+    const cgltf_material *material = primitive->material;
+    if (!material || !material->has_pbr_metallic_roughness) {
+        SDL_Log("Expected a PBR material in %s", path);
+        goto cleanup;
+    }
+
+    const cgltf_texture_view *base_color_view =
+        &material->pbr_metallic_roughness.base_color_texture;
+    const cgltf_texture *source_texture = base_color_view->texture;
+    const cgltf_image *image = source_texture ? source_texture->image : NULL;
+
+    if (base_color_view->texcoord != 0 || base_color_view->has_transform) {
+        SDL_Log("Unsupported base-color UV mapping in %s", path);
+        goto cleanup;
+    }
+
+    if (!image) {
+        SDL_Log("Expected a base-color image in %s", path);
+        goto cleanup;
+    }
+
+    if (!image->uri || image->buffer_view) {
+        SDL_Log("Embedded base-color images are not supported in %s", path);
+        goto cleanup;
+    }
+
+    image_path = gltf_external_image_path(path, image->uri);
+    if (!image_path) {
         goto cleanup;
     }
 
@@ -125,17 +209,35 @@ bool gltf_load_mesh(
         indices[i + 2] = (Uint16)b;
     }
 
-    success = mesh_create(
-        device, mesh, vertices, (Uint32)vertex_count,
-        indices, (Uint32)index_count
-    );
-
-    if (success) {
-        SDL_Log("Uploaded mesh '%s': %zu vertices, %zu indices",
-                path, (size_t)vertex_count, (size_t)index_count);
+    if (!mesh_create(
+            device, &loaded_mesh, vertices, (Uint32)vertex_count,
+            indices, (Uint32)index_count)) {
+        goto cleanup;
     }
 
+    if (!texture_load_image(device, &loaded_texture, image_path)) {
+        goto cleanup;
+    }
+
+    mesh_destroy(device, mesh);
+    texture_destroy(device, base_color_texture);
+    *mesh = loaded_mesh;
+    *base_color_texture = loaded_texture;
+    loaded_mesh = (Mesh){0};
+    loaded_texture = (Texture){0};
+    for (size_t i = 0; i < 4; ++i) {
+        base_color_factor[i] =
+            material->pbr_metallic_roughness.base_color_factor[i];
+    }
+    success = true;
+
+    SDL_Log("Uploaded textured mesh '%s': %zu vertices, %zu indices",
+            path, (size_t)vertex_count, (size_t)index_count);
+
 cleanup:
+    mesh_destroy(device, &loaded_mesh);
+    texture_destroy(device, &loaded_texture);
+    SDL_free(image_path);
     SDL_free(vertices);
     SDL_free(indices);
     cgltf_free(data);

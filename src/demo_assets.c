@@ -227,32 +227,16 @@ bool demo_assets_init(
         goto fail;
     }
 
+    float suzanne_base_color_factor[4];
     bool suzanne_loaded = gltf_load_mesh(
         device,
         &assets->suzanne_mesh,
+        &assets->suzanne_texture,
+        suzanne_base_color_factor,
         suzanne_path
     );
     SDL_free(suzanne_path);
     if (!suzanne_loaded) {
-        goto fail;
-    }
-
-    char *image_path = NULL;
-    if (SDL_asprintf(
-            &image_path,
-            "%smodels/Suzanne_BaseColor.png",
-            asset_root
-        ) < 0) {
-        SDL_Log("Could not create Suzanne image path: %s", SDL_GetError());
-        goto fail;
-    }
-
-    bool image_loaded = texture_load_image(
-        device, &assets->suzanne_texture, image_path
-    );
-    SDL_free(image_path);
-
-    if (!image_loaded) {
         goto fail;
     }
 
@@ -262,14 +246,20 @@ bool demo_assets_init(
     };
     assets->floor_material = (Material){
         .texture = &assets->checker_texture,
-        .tint = {0.85f, 0.42f, 0.32f, 1.0f}
+        // The original salmon colour, converted from sRGB to linear RGB.
+        .tint = {0.6921f, 0.1473f, 0.0835f, 1.0f}
     };
     assets->suzanne_material = (Material){
         .texture = &assets->suzanne_texture,
-        .tint = {1.0f, 1.0f, 1.0f, 1.0f}
+        .tint = {
+            suzanne_base_color_factor[0],
+            suzanne_base_color_factor[1],
+            suzanne_base_color_factor[2],
+            suzanne_base_color_factor[3]
+        }
     };
 
-    SDL_Log("Created cube, floor, and Suzanne meshes and uploaded checker texture");
+    SDL_Log("Created cube, floor, and Suzanne meshes and textures");
     return true;
 
 fail:

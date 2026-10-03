@@ -63,6 +63,16 @@ bool renderer_init(
 
     renderer->window_claimed = true;
 
+    if (!SDL_SetGPUSwapchainParameters(
+            renderer->device,
+            window,
+            SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR,
+            SDL_GPU_PRESENTMODE_VSYNC)) {
+        SDL_Log("Could not set linear SDR swapchain: %s", SDL_GetError());
+        renderer_destroy(renderer, window);
+        return false;
+    }
+
     SDL_GPUShader *vertex_shader = shader_load_msl(
         renderer->device,
         "shaders/triangle.vert.msl",
@@ -437,10 +447,11 @@ bool renderer_draw(
         SDL_GPUColorTargetInfo color_target = {0};
 
         color_target.texture = swapchain_texture;
+        // The original sky colour, converted from sRGB to linear RGB.
         color_target.clear_color =
-            (SDL_FColor){100.0f / 255.0f,
-                        149.0f / 255.0f,
-                        237.0f / 255.0f,
+            (SDL_FColor){0.1274f,
+                        0.3005f,
+                        0.8469f,
                         1.0f};
         color_target.load_op = SDL_GPU_LOADOP_CLEAR;
         color_target.store_op = SDL_GPU_STOREOP_STORE;

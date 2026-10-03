@@ -54,7 +54,7 @@ bool texture_create_rgba8(
 
     SDL_GPUTextureCreateInfo texture_info = {
         .type = SDL_GPU_TEXTURETYPE_2D,
-        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB,
         .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
         .width = width,
         .height = height,
