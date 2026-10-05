@@ -1,28 +1,5 @@
 #include "game.h"
 
-#include <math.h>
-
-static Vec3 camera_forward_direction(const Game *game) {
-    return (Vec3){
-        .x = cosf(game->camera_pitch) * sinf(game->camera_yaw),
-        .y = sinf(game->camera_pitch),
-        .z = cosf(game->camera_pitch) * cosf(game->camera_yaw)
-    };
-}
-
-static Mat4 camera_view_matrix(const Game *game) {
-    Vec3 target = vec3_add(
-        game->camera_position,
-        camera_forward_direction(game)
-    );
-
-    return mat4_look_at(
-        game->camera_position,
-        target,
-        (Vec3){0.0f, 1.0f, 0.0f}
-    );
-}
-
 static bool set_mouse_capture(SDL_Window *window, bool enabled) {
     if (!SDL_SetWindowRelativeMouseMode(window, enabled)) {
         SDL_Log(
@@ -48,7 +25,7 @@ bool game_init(
     }
 
     *game = (Game){0};
-    game->camera_position = (Vec3){0.0f, 1.2f, -4.0f};
+    game->debug_camera.position = (Vec3){0.0f, 1.2f, -4.0f};
     game->show_texture = true;
 
     if (!demo_assets_init(&game->assets, device, asset_root)) {
@@ -96,7 +73,6 @@ bool game_handle_event(
     }
 
     const float mouse_sensitivity = 0.0025f;
-    const float maximum_pitch = 1.553343f;
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
         if (event->key.scancode == SDL_SCANCODE_ESCAPE &&
@@ -125,15 +101,11 @@ bool game_handle_event(
         set_mouse_capture(window, false);
     } else if (event->type == SDL_EVENT_MOUSE_MOTION &&
                SDL_GetWindowRelativeMouseMode(window)) {
-        game->camera_yaw += event->motion.xrel * mouse_sensitivity;
-        game->camera_pitch -= event->motion.yrel * mouse_sensitivity;
-
-        if (game->camera_pitch < -maximum_pitch) {
-            game->camera_pitch = -maximum_pitch;
-        }
-        if (game->camera_pitch > maximum_pitch) {
-            game->camera_pitch = maximum_pitch;
-        }
+        camera_rotate_fps(
+            &game->debug_camera,
+            event->motion.xrel * mouse_sensitivity,
+            -event->motion.yrel * mouse_sensitivity
+        );
     }
 
     return false;
@@ -149,7 +121,7 @@ void game_update(Game *game, float dt) {
 
     demo_scene_update(&game->scene, dt);
 
-    Vec3 camera_forward = camera_forward_direction(game);
+    Vec3 camera_forward = camera_forward_direction(&game->debug_camera);
     Vec3 movement_forward = vec3_normalise((Vec3){
         .x = camera_forward.x,
         .y = 0.0f,
@@ -164,39 +136,39 @@ void game_update(Game *game, float dt) {
     float movement_distance = camera_speed * dt;
 
     if (keyboard[SDL_SCANCODE_W]) {
-        game->camera_position = vec3_add(
-            game->camera_position,
+        game->debug_camera.position = vec3_add(
+            game->debug_camera.position,
             vec3_scale(movement_forward, movement_distance)
         );
     }
 
     if (keyboard[SDL_SCANCODE_S]) {
-        game->camera_position = vec3_subtract(
-            game->camera_position,
+        game->debug_camera.position = vec3_subtract(
+            game->debug_camera.position,
             vec3_scale(movement_forward, movement_distance)
         );
     }
 
     if (keyboard[SDL_SCANCODE_A]) {
-        game->camera_position = vec3_subtract(
-            game->camera_position,
+        game->debug_camera.position = vec3_subtract(
+            game->debug_camera.position,
             vec3_scale(camera_right, movement_distance)
         );
     }
 
     if (keyboard[SDL_SCANCODE_D]) {
-        game->camera_position = vec3_add(
-            game->camera_position,
+        game->debug_camera.position = vec3_add(
+            game->debug_camera.position,
             vec3_scale(camera_right, movement_distance)
         );
     }
 
     if (keyboard[SDL_SCANCODE_SPACE]) {
-        game->camera_position.y += movement_distance;
+        game->debug_camera.position.y += movement_distance;
     }
 
     if (keyboard[SDL_SCANCODE_LSHIFT]) {
-        game->camera_position.y -= movement_distance;
+        game->debug_camera.position.y -= movement_distance;
     }
 }
 
@@ -207,14 +179,14 @@ bool game_render(const Game *game, Renderer *renderer, SDL_Window *window) {
 
     SceneLighting lighting = game->scene.lighting;
     if (game->light_follows_camera) {
-        lighting.light_position = game->camera_position;
+        lighting.light_position = game->debug_camera.position;
     }
 
     return renderer_draw(
         renderer,
         window,
         &game->scene.world,
-        camera_view_matrix(game),
+        camera_view_matrix(&game->debug_camera),
         lighting,
         game->show_texture,
         game->show_wireframe,

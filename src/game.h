@@ -5,17 +5,14 @@
 
 #include <SDL3/SDL.h>
 
+#include "camera.h"
 #include "demo_assets.h"
 #include "demo_scene.h"
 
 typedef struct {
     DemoAssets assets;
     DemoScene scene;
-
-    Vec3 camera_position;
-    float camera_yaw;
-    float camera_pitch;
-
+    Camera debug_camera;
     bool show_texture;
     bool show_wireframe;
     bool light_follows_camera;
