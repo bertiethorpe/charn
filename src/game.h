@@ -10,9 +10,17 @@
 #include "demo_scene.h"
 
 typedef struct {
+    Vec3 feet_position;
+    float yaw;
+    float pitch;
+} Player;
+
+typedef struct {
     DemoAssets assets;
     DemoScene scene;
+    Player player;
     Camera debug_camera;
+    bool use_debug_camera;
     bool show_texture;
     bool show_wireframe;
     bool light_follows_camera;

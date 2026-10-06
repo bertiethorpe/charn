@@ -13,6 +13,26 @@ static bool set_mouse_capture(SDL_Window *window, bool enabled) {
     return true;
 }
 
+static Camera player_view_camera(const Player *player) {
+    return (Camera){
+        .position = {
+            player->feet_position.x,
+            player->feet_position.y + 1.2f,
+            player->feet_position.z
+        },
+        .yaw = player->yaw,
+        .pitch = player->pitch
+    };
+}
+
+static Camera active_camera(const Game *game) {
+    if (game->use_debug_camera) {
+        return game->debug_camera;
+    }
+
+    return player_view_camera(&game->player);
+}
+
 bool game_init(
     Game *game,
     SDL_Window *window,
@@ -25,7 +45,9 @@ bool game_init(
     }
 
     *game = (Game){0};
-    game->debug_camera.position = (Vec3){0.0f, 1.2f, -4.0f};
+    game->player.feet_position = (Vec3){0.0f, 0.0f, -4.0f};
+    game->debug_camera = player_view_camera(&game->player);
+    game->use_debug_camera = true;
     game->show_texture = true;
 
     if (!demo_assets_init(&game->assets, device, asset_root)) {
@@ -82,6 +104,12 @@ bool game_handle_event(
             } else {
                 return true;
             }
+        } else if (event->key.scancode == SDL_SCANCODE_F1 &&
+                   !event->key.repeat) {
+            if (!game->use_debug_camera) {
+                game->debug_camera = player_view_camera(&game->player);
+            }
+            game->use_debug_camera = !game->use_debug_camera;
         } else if (event->key.scancode == SDL_SCANCODE_T &&
                    !event->key.repeat) {
             game->show_texture = !game->show_texture;
@@ -101,11 +129,19 @@ bool game_handle_event(
         set_mouse_capture(window, false);
     } else if (event->type == SDL_EVENT_MOUSE_MOTION &&
                SDL_GetWindowRelativeMouseMode(window)) {
-        camera_rotate_fps(
-            &game->debug_camera,
-            event->motion.xrel * mouse_sensitivity,
-            -event->motion.yrel * mouse_sensitivity
-        );
+        float yaw_delta = event->motion.xrel * mouse_sensitivity;
+        float pitch_delta = -event->motion.yrel * mouse_sensitivity;
+
+        if (game->use_debug_camera) {
+            camera_rotate_fps(
+                &game->debug_camera, yaw_delta, pitch_delta
+            );
+        } else {
+            Camera view = player_view_camera(&game->player);
+            camera_rotate_fps(&view, yaw_delta, pitch_delta);
+            game->player.yaw = view.yaw;
+            game->player.pitch = view.pitch;
+        }
     }
 
     return false;
@@ -116,10 +152,14 @@ void game_update(Game *game, float dt) {
         return;
     }
 
+    demo_scene_update(&game->scene, dt);
+
+    if (!game->use_debug_camera) {
+        return;
+    }
+
     const float camera_speed = 5.0f;
     const bool *keyboard = SDL_GetKeyboardState(NULL);
-
-    demo_scene_update(&game->scene, dt);
 
     Vec3 camera_forward = camera_forward_direction(&game->debug_camera);
     Vec3 movement_forward = vec3_normalise((Vec3){
@@ -177,16 +217,17 @@ bool game_render(const Game *game, Renderer *renderer, SDL_Window *window) {
         return false;
     }
 
+    Camera view = active_camera(game);
     SceneLighting lighting = game->scene.lighting;
     if (game->light_follows_camera) {
-        lighting.light_position = game->debug_camera.position;
+        lighting.light_position = view.position;
     }
 
     return renderer_draw(
         renderer,
         window,
         &game->scene.world,
-        camera_view_matrix(&game->debug_camera),
+        camera_view_matrix(&view),
         lighting,
         game->show_texture,
         game->show_wireframe,
