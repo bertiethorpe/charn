@@ -155,6 +155,36 @@ void game_update(Game *game, float dt) {
     demo_scene_update(&game->scene, dt);
 
     if (!game->use_debug_camera) {
+        const bool *keyboard = SDL_GetKeyboardState(NULL);
+        const float player_speed = 4.0f;
+
+        Camera view = player_view_camera(&game->player);
+        Vec3 look_forward = camera_forward_direction(&view);
+        Vec3 forward = vec3_normalise((Vec3){
+            .x = look_forward.x,
+            .y = 0.0f,
+            .z = look_forward.z
+        });
+        Vec3 right = vec3_cross((Vec3){0.0f, 1.0f, 0.0f}, forward);
+
+        Vec3 direction = {0.0f, 0.0f, 0.0f};
+        if (keyboard[SDL_SCANCODE_W]) {
+            direction = vec3_add(direction, forward);
+        }
+        if (keyboard[SDL_SCANCODE_S]) {
+            direction = vec3_subtract(direction, forward);
+        }
+        if (keyboard[SDL_SCANCODE_D]) {
+            direction = vec3_add(direction, right);
+        }
+        if (keyboard[SDL_SCANCODE_A]) {
+            direction = vec3_subtract(direction, right);
+        }
+
+        game->player.feet_position = vec3_add(
+            game->player.feet_position,
+            vec3_scale(vec3_normalise(direction), player_speed * dt)
+        );
         return;
     }
 
